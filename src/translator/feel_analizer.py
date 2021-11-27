@@ -25,27 +25,20 @@ class FEELInputExtractor(feelVisitor):
 
     @property
     def result(self):
-        return self.identifiers
+        to_return = set()
+        for r in self.identifiers:
+            to_return.add(r.replace(' . ', '_').replace('(', '_').replace(')', '').replace(' ', ''))
+        return to_return
 
-    def visitR_filterPathExpression(self, ctx:feelParser.R_filterPathExpressionContext):
-        lbrack_found = False
-        rbrack_found = False
-        for c in ctx.getChildren():
-            if isinstance(c, TerminalNode) and c.symbol.type == feelParser.LBRACK:
-                lbrack_found = True
-            elif isinstance(c, TerminalNode) and c.symbol.type == feelParser.RBRACK:
-                rbrack_found = True
+    def visitQualifiedName(self, ctx:feelParser.QualifiedNameContext):
+        p = FEELTreePrinter()
+        p.visit(ctx.parentCtx)
+        self.identifiers.add(p.tree_expression)
 
-        if lbrack_found and rbrack_found:
-            p = FEELTreePrinter()
-            p.visit(ctx)
-            self.identifiers.add(p.tree_expression)
-        else:
-            self.visitChildren(ctx)
-
-    def visitTerminal(self, node):
-        if node.symbol.type == feelLexer.Identifier and isinstance(node.parentCtx, feelParser.NameRefContext):
-            self.identifiers.add(node.getText())
+    def visitFnInvocation(self, ctx:feelParser.FnInvocationContext):
+        p = FEELTreePrinter()
+        p.visit(ctx.parentCtx)
+        self.identifiers.add(p.tree_expression)
 
 
 class FEELRuleExtractor(feelVisitor):
@@ -67,7 +60,7 @@ class FEELRuleExtractor(feelVisitor):
 
     def visitFnInvocation(self, ctx:feelParser.FnInvocationContext):
         self.rule.append(
-            ctx.getText()
+            'boolean'
         )
 
 
@@ -105,3 +98,18 @@ class AndSplitter(feelVisitor):
     @property
     def result(self):
         return self._operators
+
+
+class ScopesDeleter(feelVisitor):
+    def __init__(self):
+        super(ScopesDeleter, self).__init__()
+        self._operator = []
+
+    def visitPrimaryParens(self, ctx:feelParser.PrimaryParensContext):
+        printer = FEELTreePrinter()
+        printer.visit(ctx.getChild(1))
+        self._operator.append(printer.tree_expression)
+
+    @property
+    def result(self):
+        return self._operator

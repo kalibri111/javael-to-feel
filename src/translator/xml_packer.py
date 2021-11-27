@@ -1,26 +1,21 @@
 import string
 import random
 import re
+import typing
+
 from lxml import etree
 from enum import Enum
 from collections import namedtuple
-
+from src.translator.dmn_shape import DMNShapeOrdered, DMNShape, CENTER_X, CENTER_Y, build_shape_xml
 from src.translator.dmn_tree import DMNTree, DMNTreeNode, OperatorDMN, ExpressionDMN
+from src.translator.zip_storage import DependenceStorage, InputDataStorage
 from src.translator.knf_converter import toDMNReady
 from typing import Dict, Iterable, Set, List, Collection
 from loguru import logger
-from src.translator.feel_analizer import tree, FEELInputExtractor, FEELRuleExtractor, AndSplitter, OrSplitter
+from src.translator.feel_analizer import tree, FEELInputExtractor, FEELRuleExtractor, AndSplitter, OrSplitter, \
+    ScopesDeleter
 from ANTLR_JavaELParser.JavaELParser import JavaELParser
-
-xmlns = 'https://www.omg.org/spec/DMN/20191111/MODEL/'
-dmndi = 'https://www.omg.org/spec/DMN/20191111/DMNDI/'
-biodi = 'http://bpmn.io/schema/dmn/biodi/2.0'
-dc = 'http://www.omg.org/spec/DMN/20180521/DC/'
-di = 'http://www.omg.org/spec/DMN/20180521/DI/'
-namespace = 'http://camunda.org/schema/1.0/dmn'
-exporter = 'Camunda Modeler'
-exporterVersion = '4.9.0'
-
+from src.translator.xml_conf import *
 
 RuleTag = namedtuple('RuleTag', ('inputEntries', 'outputEntry'))
 
@@ -71,7 +66,10 @@ class DmnElementsExtracter:
         expr_tree = tree(expr)
         rule_extr = FEELRuleExtractor()
         rule_extr.visit(expr_tree)
-        return rule_extr.result
+        if rule_extr.result:
+            return rule_extr.result
+        else:
+            return 'information_source'
 
     @classmethod
     def _split_by_or_by_and(cls, expr: str) -> List[List[str]]:
@@ -82,21 +80,29 @@ class DmnElementsExtracter:
         """
         feel_ast = tree(expr)
         or_splitter = OrSplitter()
-        and_splitter = AndSplitter()
         or_splitter.visit(feel_ast)
         or_operands = or_splitter.result
-        to_return = []
-        for or_op in or_operands:
-            or_op_ast = tree(or_op)
-            and_splitter.visit(or_op_ast)
-            to_return.append(and_splitter.result)
-        return to_return
+        if or_operands:
+            to_return = []
+            for or_op in or_operands:
+                or_op_ast = tree(or_op)
+                and_splitter = AndSplitter()
+                and_splitter.visit(or_op_ast)
+                if and_splitter.result:
+                    to_return.append(and_splitter.result)
+                else:
+                    scopes_deleter = ScopesDeleter()
+                    scopes_deleter.visit(or_op_ast)
+                    to_return.append(scopes_deleter.result)
+            return to_return
+        else:
+            scopes_deleter = ScopesDeleter()
+            scopes_deleter.visit(feel_ast)
+            return [scopes_deleter.result]
 
     @classmethod
     def getInputs(cls, expr: str) -> Set[str]:
         """
-        operands can be 'lvalue op rvalue' or 'input.boolean_function'
-        inputs are lvalue or input without boolean_function
         :param expr: simple dmn expression
         :return: Set[str]
         """
@@ -106,7 +112,7 @@ class DmnElementsExtracter:
         return extractor.result
 
     @classmethod
-    def getRulesOrdered(cls, expr: str, inputs) -> Iterable[RuleTag]:  # rvalue c оператором
+    def getRulesOrdered(cls, expr: str, inputs) -> Iterable[RuleTag]:
         """
         :param inputs: order of rules
         :param expr:
@@ -130,9 +136,18 @@ class DmnElementsExtracter:
                 used_inputs.append(inputName)
 
                 if rules[inputName]:
-                    rules[inputName].append(ruleExpr)
+                    if ruleExpr == 'boolean' or ruleExpr == 'information_source':
+                        if 'true' in rules[inputName]:
+                            rules[inputName].append('false')
+                        else:
+                            rules[inputName].append('true')
+                    else:
+                        rules[inputName].append(ruleExpr)
                 else:
-                    rules[inputName] = [ruleExpr]
+                    if ruleExpr == 'boolean' or ruleExpr == 'information_source':
+                        rules[inputName] = ['true']
+                    else:
+                        rules[inputName] = [ruleExpr]
 
             # rule of missed input is None
             for key in rules.keys():
@@ -169,7 +184,7 @@ class DmnElementsExtracter:
                 # get last rule ordered to inputs arg
                 none_row.append(None)
             to_return.append(RuleTag(inputEntries=none_row, outputEntry='false'))
-        
+
         return to_return
 
 
@@ -178,25 +193,32 @@ class DecisionTable:
     OPERATION_RESULT_LABEL = 'operation_result'
 
     @classmethod
-    def newTable(cls, inputs: Collection, output_name: str, rules_rows: Iterable[RuleTag], dependentDMNs: List[str]):
-        decision_tag = cls.decision(cls._constructDecisionId(), 'test_name')
+    def newInformationRequirement(cls, dependence_href: str):
+        info_requirement_tag = cls.informationRequirement(cls._constructInformationRequirementId())
+        req_input_tag = cls.requiredInput(dependence_href)
+        info_requirement_tag.append(req_input_tag)
+        return info_requirement_tag
+
+    @classmethod
+    def newTable(cls, inputs: Collection, output_name: str, rules_rows: Iterable[RuleTag], dependentDMNs: List[str],
+                 dmn_id: str, input_data_hrefs: List[str] = None) -> etree.Element:
+        decision_tag = cls.decision(cls._constructDecisionId(dmn_id), 'test_name')
 
         for dependence in dependentDMNs:
-            # TODO: add href to inforeq
-            info_requirement_tag = cls.informationRequirement(cls._constructInformationRequirementId())
-            req_input_tag = cls.requiredInput(dependence)
-
-            info_requirement_tag.append(req_input_tag)
-
+            info_requirement_tag = cls.newInformationRequirement(dependence)
             decision_tag.append(info_requirement_tag)
 
         decisionTable = cls.decisionTable(cls._constructDecisionTableId())
-
         decision_tag.append(decisionTable)
+
+        # создать связь с InputData
+        if input_data_hrefs:
+            for input_data_href in input_data_hrefs:
+                input_data_info_req_tag = cls.newInformationRequirement(input_data_href)
+                decision_tag.append(input_data_info_req_tag)
 
         # construct input tag branch
         for inputVar in inputs:
-
             input_tag = cls.input(cls._constructInputId(), inputVar)
             # TODO: TypeRef.STRING всегда?
             input_tag.append(cls.inputExpression(cls._constructInputExpressionId(), TypeRef.STRING, inputVar))
@@ -223,54 +245,58 @@ class DecisionTable:
         return decision_tag
 
     @classmethod
-    def from_expression(cls, expression: str, output_name: str, dependentDMNs: List[str]) -> etree.Element:
-        inputs = DmnElementsExtracter.getInputs(expression)
+    def from_expression(cls, expression: str, inputs: Set[str], input_data_hrefs: List[str], output_name: str,
+                        dependentDMNs: List[str], dmn_id) -> etree.Element:
+        logger.debug(f"DecisionTable constructs from expression with dmn_id: {dmn_id}")
         return cls.newTable(
-                inputs,
-                output_name,
-                DmnElementsExtracter.getRulesOrdered(expression, inputs),
-                dependentDMNs
-            )
+            inputs,
+            output_name,
+            DmnElementsExtracter.getRulesOrdered(expression, inputs),
+            dependentDMNs,
+            dmn_id,
+            input_data_hrefs
+        )
 
     @classmethod
-    def from_constraint(cls, operator: int, dependentDMNs: List[str], left_operand, right_operand=None):
+    def from_constraint(cls, dmn_id: str, operator: int, dependentDMNs: List[str], left_operand, right_operand=None):
 
         if operator == JavaELParser.Equal:
 
-            return cls._constructEqual(left_operand, right_operand, dependentDMNs)
+            return cls._constructEqual(left_operand, right_operand, dependentDMNs, dmn_id)
 
         elif operator == JavaELParser.NotEqual:
 
-            return cls._constructNotEqual(left_operand, right_operand, dependentDMNs)
+            return cls._constructNotEqual(left_operand, right_operand, dependentDMNs, dmn_id)
 
         elif operator == JavaELParser.Greater:
 
-            return cls._constructGreater(left_operand, right_operand, dependentDMNs)
+            return cls._constructGreater(left_operand, right_operand, dependentDMNs, dmn_id)
 
         elif operator == JavaELParser.GreaterEqual:
 
-            return cls._constructGreaterEqual(left_operand, right_operand, dependentDMNs)
+            return cls._constructGreaterEqual(left_operand, right_operand, dependentDMNs, dmn_id)
 
         elif operator == JavaELParser.Less:
 
-            return cls._constructLess(left_operand, right_operand, dependentDMNs)
+            return cls._constructLess(left_operand, right_operand, dependentDMNs, dmn_id)
 
         elif operator == JavaELParser.LessEqual:
 
-            return cls._constructLessEqual(left_operand, right_operand, dependentDMNs)
+            return cls._constructLessEqual(left_operand, right_operand, dependentDMNs, dmn_id)
 
         elif operator == JavaELParser.Not:
 
-            return cls._constructNot(left_operand, dependentDMNs)
+            return cls._constructNot(left_operand, dependentDMNs, dmn_id)
 
         elif operator == JavaELParser.Empty:
 
-            return cls._constructEmpty(left_operand, dependentDMNs)
+            return cls._constructEmpty(left_operand, dependentDMNs, dmn_id)
 
     @classmethod
-    def _constructEqual(cls, left_op: etree.Element, right_op: etree.Element, dependentDMNs: List[str]):
+    def _constructEqual(cls, left_op: etree.Element, right_op: etree.Element, dependentDMNs: List[str], dmn_id: str):
 
-        logger.debug(f'creating <green>equal</green> xml tree left_op: <red>{left_op}</red>, right_op: <red>{right_op}</red>')
+        logger.debug(
+            f'DecisionTable constructs from constraint <green>equal</green>, left_op: <red>{left_op}</red>, right_op: <red>{right_op}</red>')
 
         rules = (
             RuleTag(
@@ -286,13 +312,15 @@ class DecisionTable:
             (left_op.get('id'), right_op.get('id')),
             cls.OPERATION_RESULT_LABEL,
             rules,
-            dependentDMNs
+            dependentDMNs,
+            dmn_id
         )
 
     @classmethod
-    def _constructNotEqual(cls, left_op, right_op, dependentDMNs: List[str]):
+    def _constructNotEqual(cls, left_op, right_op, dependentDMNs: List[str], dmn_id: str):
 
-        logger.debug(f'creating <green>not equal</green> xml tree left_op: <red>{left_op}</red>, right_op: <red>{right_op}</red>')
+        logger.debug(
+            f'DecisionTable constructs from constraint <green>not equal</green>, left_op: <red>{left_op}</red>, right_op: <red>{right_op}</red>')
 
         rules = (
             RuleTag(
@@ -308,14 +336,15 @@ class DecisionTable:
             (left_op.get('id'), right_op.get('id')),
             cls.OPERATION_RESULT_LABEL,
             rules,
-            dependentDMNs
+            dependentDMNs,
+            dmn_id
         )
 
     @classmethod
-    def _constructLess(cls, left_op, right_op, dependentDMNs: List[str]):
+    def _constructLess(cls, left_op, right_op, dependentDMNs: List[str], dmn_id):
 
         logger.debug(
-            f'creating <green>less</green> xml tree left_op: <red>{left_op}</red>, right_op: <red>{right_op}</red>')
+            f'DecisionTable constructs from constraint <green>less</green>: left_op: <red>{left_op}</red>, right_op: <red>{right_op}</red>')
 
         rules = (
             RuleTag(
@@ -331,14 +360,15 @@ class DecisionTable:
             (left_op.get('id'), right_op.get('id')),
             cls.OPERATION_RESULT_LABEL,
             rules,
-            dependentDMNs
+            dependentDMNs,
+            dmn_id
         )
 
     @classmethod
-    def _constructLessEqual(cls, left_op, right_op, dependentDMNs: List[str]):
+    def _constructLessEqual(cls, left_op, right_op, dependentDMNs: List[str], dmn_id):
 
         logger.debug(
-            f'creating <green>less equal</green> xml tree left_op: <red>{left_op}</red>, right_op: <red>{right_op}</red>')
+            f'DecisionTable constructs from constraint <green>less equal</green>: left_op: <red>{left_op}</red>, right_op: <red>{right_op}</red>')
 
         rules = (
             RuleTag(
@@ -354,14 +384,15 @@ class DecisionTable:
             (left_op.get('id'), right_op.get('id')),
             cls.OPERATION_RESULT_LABEL,
             rules,
-            dependentDMNs
+            dependentDMNs,
+            dmn_id
         )
 
     @classmethod
-    def _constructGreater(cls, left_op, right_op, dependentDMNs: List[str]):
+    def _constructGreater(cls, left_op, right_op, dependentDMNs: List[str], dmn_id: str):
 
         logger.debug(
-            f'creating <green>greater</green> xml tree left_op: <red>{left_op}</red>, right_op: <red>{right_op}</red>')
+            f'DecisionTable constructs from constraint <green>greater</green>: left_op: <red>{left_op}</red>, right_op: <red>{right_op}</red>')
 
         rules = (
             RuleTag(
@@ -377,13 +408,15 @@ class DecisionTable:
             (left_op.get('id'), right_op.get('id')),
             cls.OPERATION_RESULT_LABEL,
             rules,
-            dependentDMNs
+            dependentDMNs,
+            dmn_id
         )
 
     @classmethod
-    def _constructGreaterEqual(cls, left_op, right_op, dependentDMNs: List[str]):
+    def _constructGreaterEqual(cls, left_op, right_op, dependentDMNs: List[str], dmn_id: str):
 
-        logger.debug(f'creating <green>greater equal</green> xml tree left_op: <red>{left_op}</red>, right_op: <red>{right_op}</red>')
+        logger.debug(
+            f'DecisionTable constructs from constraint <green>greater equal</green>: left_op: <red>{left_op}</red>, right_op: <red>{right_op}</red>')
 
         rules = (
             RuleTag(
@@ -399,14 +432,15 @@ class DecisionTable:
             (left_op.get('id'), right_op.get('id')),
             cls.OPERATION_RESULT_LABEL,
             rules,
-            dependentDMNs
+            dependentDMNs,
+            dmn_id
         )
 
     @classmethod
-    def _constructNot(cls, op, dependentDMNs: List[str]):
+    def _constructNot(cls, op, dependentDMNs: List[str], dmn_id: str):
 
         logger.debug(
-            f'creating <green>not</green> xml tree op: <red>{op}</red>')
+            f'DecisionTable constructs from constraint <green>not</green>: op: <red>{op}</red>')
 
         rules = (
             RuleTag(
@@ -422,14 +456,15 @@ class DecisionTable:
             [dependentDMNs[0]],
             cls.OPERATION_RESULT_LABEL,
             rules,
-            dependentDMNs
+            dependentDMNs,
+            dmn_id
         )
 
     @classmethod
-    def _constructEmpty(cls, op, dependentDMNs: List[str]):
+    def _constructEmpty(cls, op, dependentDMNs: List[str], dmn_id: str):
 
         logger.debug(
-            f'creating <green>empty</green> xml tree op: <red>{op}</red>')
+            f'DecisionTable constructs from constraint <green>empty</green>: op: <red>{op}</red>')
 
         rules = (
             RuleTag(
@@ -445,7 +480,8 @@ class DecisionTable:
             [dependentDMNs[0]],
             cls.OPERATION_RESULT_LABEL,
             rules,
-            dependentDMNs
+            dependentDMNs,
+            dmn_id
         )
 
     @classmethod
@@ -455,14 +491,14 @@ class DecisionTable:
     @staticmethod
     def decisionTable(id_attr: str):
         logger.debug(
-            f'new <green>decisionTable</green> xml tag, id: <red>{id_attr}</red>')
+            f'DecisionTable constructs new <green>decisionTable</green> xml tag, id: <red>{id_attr}</red>')
 
         return etree.Element('decisionTable', id=id_attr)
 
     @staticmethod
     def input(id_attr: str, label_attr: str):
         logger.debug(
-            f'new <green>input</green> xml tag, id: <red>{id_attr}</red>, label: <red>{label_attr}</red>')
+            f'DecisionTable constructs new <green>input</green> xml tag, id: <red>{id_attr}</red>, label: <red>{label_attr}</red>')
 
         if not label_attr:
             label_attr = ''
@@ -473,7 +509,7 @@ class DecisionTable:
     def inputExpression(id_attr: str, typeRef_attr: TypeRef, text_val: str):
 
         logger.debug(
-            f'new <green>inputExpression</green> xml tag, id: <red>{id_attr}</red>, typeRef: <red>{typeRef_attr}</red>, text: <red>{text_val}</red>')
+            f'DecisionTable constructs new <green>inputExpression</green> xml tag, id: <red>{id_attr}</red>, typeRef: <red>{typeRef_attr}</red>, text: <red>{text_val}</red>')
 
         to_return = None
 
@@ -489,7 +525,7 @@ class DecisionTable:
     def output(id_attr: str, label_attr: str, name_attr: str, typeRef_attr: TypeRef):
 
         logger.debug(
-            f'new <green>output</green> xml tag, id: <red>{id_attr}</red>, typeRef: <red>{typeRef_attr}</red>, label: <red>{label_attr}</red>, name: <red>{name_attr}</red>')
+            f'DecisionTable constructs new <green>output</green> xml tag, id: <red>{id_attr}</red>, typeRef: <red>{typeRef_attr}</red>, label: <red>{label_attr}</red>, name: <red>{name_attr}</red>')
 
         if typeRef_attr == TypeRef.STRING:
             return etree.Element('output', id=id_attr, label=label_attr, name=name_attr, typeRef='string')
@@ -500,7 +536,7 @@ class DecisionTable:
     def rule(id_attr: str, description_tag_text: str = None):
 
         logger.debug(
-            f'new <green>rule</green> xml tag, id: <red>{id_attr}</red>, description: <red>{description_tag_text}</red>')
+            f'DecisionTable constructs new <green>rule</green> xml tag, id: <red>{id_attr}</red>, description: <red>{description_tag_text}</red>')
 
         to_return = etree.Element('rule', id=id_attr)
 
@@ -520,7 +556,7 @@ class DecisionTable:
     @staticmethod
     def inputEntry(id_attr: str, text_val: str):
         logger.debug(
-            f'new <green>inputEntry</green> xml tag, id: <red>{id_attr}</red>, text: <red>{text_val}</red>')
+            f'DecisionTable constructs new <green>inputEntry</green> xml tag, id: <red>{id_attr}</red>, text: <red>{text_val}</red>')
 
         if not text_val:
             text_val = ''
@@ -536,7 +572,7 @@ class DecisionTable:
             text_val = ''
 
         logger.debug(
-            f'new <green>outputEntry</green> xml tag, id: <red>{id_attr}</red>, text: <red>{text_val}</red>')
+            f'DecisionTable constructs new <green>outputEntry</green> xml tag, id: <red>{id_attr}</red>, text: <red>{text_val}</red>')
 
         to_return = etree.Element('outputEntry', id=id_attr)
         to_return.append(DecisionTable.text(text_val))
@@ -545,35 +581,35 @@ class DecisionTable:
     @staticmethod
     def informationRequirement(id_attr: str):
         logger.debug(
-            f'new <green>informationRequirement</green> xml tag, id: <red>{id_attr}</red>')
+            f'DecisionTable constructs new <green>informationRequirement</green> xml tag, id: <red>{id_attr}</red>')
 
         return etree.Element('informationRequirement', id=id_attr)
 
     @staticmethod
     def requiredInput(href_attr: str):
         logger.debug(
-            f'new <green>requiredInput</green> xml tag, href: <red>{href_attr}</red>')
+            f'DecisionTable constructs new <green>requiredInput</green> xml tag, href: <red>{href_attr}</red>')
 
         return etree.Element('requiredInput', href=href_attr)
 
     @staticmethod
     def requiredDecision(href_attr: str):
         logger.debug(
-            f'new <green>requiredDecision</green> xml tag, href: <red>{href_attr}</red>')
+            f'DecisionTable constructs new <green>requiredDecision</green> xml tag, href: <red>{href_attr}</red>')
 
         return etree.Element('requiredDecision', href=href_attr)
 
     @staticmethod
     def authorityRequirement(id_attr: str):
         logger.debug(
-            f'new <green>authorityRequirement</green> xml tag, id: <red>{id_attr}</red>')
+            f'DecisionTable constructs new <green>authorityRequirement</green> xml tag, id: <red>{id_attr}</red>')
 
         return etree.Element('authorityRequirement', id=id_attr)
 
     @staticmethod
     def requiredAuthority(href_attr: str):
         logger.debug(
-            f'new <green>requiredAuthority</green> xml tag, href: <red>{href_attr}</red>')
+            f'DecisionTable constructs new <green>requiredAuthority</green> xml tag, href: <red>{href_attr}</red>')
 
         return etree.Element('requiredAuthority', href=href_attr)
 
@@ -617,12 +653,37 @@ class DecisionTable:
         )
 
     @staticmethod
-    def _constructDecisionId() -> str:
-        return 'Decision_' + DecisionTable._constructIdSuffix()
+    def _constructDecisionId(dmn_id: str) -> str:
+        new_id = 'Decision_' + DecisionTable._constructIdSuffix()
+
+        DependenceStorage()[dmn_id] = new_id
+        return new_id
 
     @staticmethod
     def _constructInformationRequirementId() -> str:
         return 'InformationRequirement_' + DecisionTable._constructIdSuffix()
+
+
+class InputData:
+    def __init__(self, name_attr: str):
+        self._tag_id = self._id()
+        logger.debug(f"InputData creates: id: {self._tag_id}, name: {name_attr}")
+        self._tag_name = name_attr
+
+    def xml_tag(self):
+        return etree.Element('inputData', id=self._tag_id, name=self._tag_name)
+
+    def dmn_shape(self):
+        return
+
+    def _id(self):
+        return "InputData_" + ''.join(
+            random.choice(string.ascii_uppercase + string.digits)
+            for _ in range(DecisionTable.RANDOM_ID_LEN)
+        )
+
+    def href(self):
+        return '#' + self._tag_id
 
 
 class DMN_XML:
@@ -634,54 +695,137 @@ class DMN_XML:
         """
         root = tree.root
         decisions = []
-        cls._dfs(root, decisions)
-        return expression_xml('drd_id', decisions)
+        shape_root = None
+        cls._preorder_traversal(root, decisions, shape_root)
+        xml_root_tag = build_xml('drd_id', decisions)
+
+        if shape_root is None:
+            logger.error(f"DMN_XML failure to build Shapes")
+            raise ValueError('empty shapes')
+
+        shapes_tag = build_shape_xml(shape_root)
+        xml_root_tag.append(shapes_tag)
+        return xml_root_tag
 
     @classmethod
-    def _dfs(cls, node: DMNTreeNode, decisions: List[etree.Element]):
-        if len(node.children):
-            for child in node.children:
-                cls._dfs(child, decisions)
+    def _preorder_traversal(cls, node: DMNTreeNode, decisions: List[etree.Element],
+                            shape_node: typing.Union[DMNShapeOrdered, None]):
+        """
+        Обход preorder, построение XML онлайн
+        :param node:
+        :param decisions:
+        :return:
+        """
 
         # constraint dmn node
         if isinstance(node, OperatorDMN):
-            cls.visitConstraint(node, decisions)
+            related_shapes = cls.visitConstraint(node, decisions)
+            shape_node = cls.add_children_to_shape_or_init(related_shapes, shape_node)
+
         elif isinstance(node, ExpressionDMN):
             # expression node
-            cls.visitExpression(node, decisions)
+            related_shapes = cls.visitExpression(node, decisions)
+            shape_node = cls.add_children_to_shape_or_init(related_shapes, shape_node)
         else:
             raise ValueError('XML builder got wrong DMN node type')
 
-    @classmethod
-    def visitExpression(cls, node: ExpressionDMN, decision_list: List[etree.Element]):
-        logger.debug(f'construct DMN xml from <red>expression</red>: <green>{node.expression}</green>')
-
-        dependents = ['dmn' + str(id(c)) for c in node.children]
-
-        new_table = DecisionTable.from_expression(node.expression, 'output_name here', dependents)
-
-        if new_table is None:
-            logger.error(f'construct DMN xml from <red>expression</red>: <green>{node.expression}</green> failure')
-            raise ValueError('DecisionTable is None')
-
-        logger.debug(f'GENERATED XML FROM EXPRESSION')
-        logger.debug(f'Expression: <red>{node.expression}</red>')
-        logger.opt(colors=False).debug(f'\n{etree.tostring(new_table, pretty_print=True).decode("UTF-8")}')
-
-        decision_list.append(new_table)
+        if len(node.children):
+            for child in node.children:
+                cls._preorder_traversal(child, decisions, shape_node)
 
     @classmethod
-    def visitConstraint(cls, node: OperatorDMN, decision_list: List[etree.Element]):
-        logger.debug(f'construct DMN xml from <red>constraint</red>: <green>{node.operator}</green>')
+    def add_children_to_shape_or_init(cls, related_shapes, shape_node):
+        if shape_node is None:
+            #         должен быть только один элемент в related_shapes
+            if len(related_shapes) != 1:
+                raise ValueError('DMN_XML.visit more than one root to initialize')
+            shape_node = DMNShapeOrdered(related_shapes[0].id, CENTER_X, CENTER_Y, 0)
+        else:
+            for i in related_shapes:
+                shape_node.append(i.id)
+        return shape_node
 
-        dependents = ['dmn' + str(id(c)) for c in node.children]
+    # TODO: какой лучше возвращаемый тип?
+    @classmethod
+    def visitExpression(cls, node: ExpressionDMN, decision_list: List[etree.Element]) -> List[etree.Element]:
+        logger.debug(f'DMN_XML constructs xml from <red>expression</red>: <green>{node.expression}</green>')
+
+        # dependents = ['#' + DependenceStorage()['dmn' + str(id(c))] for c in node.children]
+        dependents = []
+
+        # все зависимые dmn диаграммы
+        for c in node.children:
+            if 'dmn' + str(id(c)) in DependenceStorage().keys():
+                dependents.append('#' + DependenceStorage()['dmn' + str(id(c))])
+        # все зависимые inputData
+        for c in node.children:
+            if 'dmn' + str(id(c)) in InputDataStorage().keys():
+                dependents.append(InputDataStorage()['dmn' + str(id(c))].href())
+
+        self_id = 'dmn' + str(id(node))
+
+        inputs = set()
+        input_data_hrefs = []
+
+        input_data_tags = []
+
+        for input_data_candidate in DmnElementsExtracter.getInputs(node.expression):
+            if input_data_candidate not in InputDataStorage():
+                if 'dmn' not in input_data_candidate:
+                    new_input_data = InputData(input_data_candidate)
+
+                    InputDataStorage()[self_id] = new_input_data
+
+                    input_data_hrefs.append(new_input_data.href())
+                    input_data_tags.append(new_input_data)
+            else:
+                inputs.add(input_data_candidate)
+
+        if inputs:
+            new_table = DecisionTable.from_expression(node.expression, inputs, input_data_hrefs, 'output_name here',
+                                                      dependents, self_id)
+
+            if new_table is None:
+                logger.error(
+                    f'DMN_XML constructs xml from <red>expression</red>: <green>{node.expression}</green> failure')
+                raise ValueError('DecisionTable is None')
+
+            logger.debug(f'GENERATED XML FROM EXPRESSION')
+            logger.debug(f'Expression: <red>{node.expression}</red>')
+            logger.opt(colors=False).debug(f'\n{etree.tostring(new_table, pretty_print=True).decode("UTF-8")}')
+            decision_list.append(new_table)
+            return [new_table]
+        else:
+            logger.debug(f'DMN_XML constructs inputData tags: {input_data_hrefs}')
+            # добавление inputData объекта в decision_list, предполагаю, что они тут единственные операнды
+            for input_data in input_data_tags:
+                decision_list.append(input_data.xml_tag())
+            return input_data_tags
+
+    @classmethod
+    def visitConstraint(cls, node: OperatorDMN, decision_list: List[etree.Element]) -> List[etree.Element]:
+        logger.debug(f'DMN_XML constructs xml from <red>constraint</red>: <green>{node.operator}</green>')
+
+        dependents = []
+
+        # все зависимые dmn диаграммы
+        for c in node.children:
+            if 'dmn' + str(id(c)) in DependenceStorage().keys():
+                dependents.append('#' + DependenceStorage()['dmn' + str(id(c))])
+        # все зависимые inputData
+        for c in node.children:
+            if 'dmn' + str(id(c)) in InputDataStorage().keys():
+                dependents.append(InputDataStorage()['dmn' + str(id(c))].href())
+
+        self_id = 'dmn' + str(id(node))
 
         new_table = None
         if node.operator.symbol.type in [JavaELParser.Empty, JavaELParser.Not]:
-            new_table = DecisionTable.from_constraint(node.operator.symbol.type, dependents, decision_list[-1])
+            new_table = DecisionTable.from_constraint(self_id, node.operator.symbol.type, dependents, decision_list[-1])
 
             if new_table is None:
-                logger.error(f'construct DMN xml from <red>constraint</red>: <green>{node.operator}</green> failure')
+                logger.error(
+                    f'DMN_XML constructs xml from <red>constraint</red>: <green>{node.operator}</green> failure')
                 raise ValueError('DecisionTable is None')
 
             decision_list.append(new_table)
@@ -689,10 +833,11 @@ class DMN_XML:
             left_op = decision_list[-2]
             right_op = decision_list[-1]
 
-            new_table = DecisionTable.from_constraint(node.operator, dependents, left_op, right_op)
+            new_table = DecisionTable.from_constraint(self_id, node.operator, dependents, left_op, right_op)
 
             if new_table is None:
-                logger.error(f'construct DMN xml from <red>constraint</red>: <green>{node.operator}</green> failure')
+                logger.error(
+                    f'DMN_XML constructs xml from <red>constraint</red>: <green>{node.operator}</green> failure')
                 raise ValueError('DecisionTable is None')
 
             decision_list.append(new_table)
@@ -700,9 +845,16 @@ class DMN_XML:
         logger.debug(f'GENERATED XML FROM CONSTRAINT')
         logger.debug(f'Constraint: <red>{node.operator}</red>')
         logger.opt(colors=False).debug(f'\n{etree.tostring(new_table, pretty_print=True).decode("UTF-8")}')
+        return [new_table]
 
 
-def expression_xml(drd_id: str, decisions: List[etree.Element]):
+def dmn_shape(coord_x: int, coord_y: int, element_id: str):
+    tag = etree.Element(etree.QName(dmndi, 'DMNShape'), dmnElementRef=element_id)
+    bound = etree.SubElement(tag, etree.QName(dc, 'Bounds'), height='80', width='180', x=str(coord_x), y=str(coord_y))
+    return tag
+
+
+def build_xml(drd_id: str, decisions: List[etree.Element]):
     NSMAP = {'dmndi': dmndi, 'dc': dc, 'biodi': biodi, 'di': di, }
     root = etree.Element('definitions', xmlns=xmlns, nsmap=NSMAP)
     attributes = root.attrib
@@ -710,7 +862,30 @@ def expression_xml(drd_id: str, decisions: List[etree.Element]):
     attributes['namespace'] = namespace
     attributes['exporter'] = exporter
     attributes['exporterVersion'] = exporterVersion
+
+    index = 1
+    shape_tags = []
+
     for d in decisions:
-        root.append(d)
-    # TODO: добавить inputData
+        if d.tag == 'decision':
+            # shape_tags.append(dmn_shape(300, 150 * index, d.attrib['id']))
+            # index += 1
+            root.append(d)
+
+    for input_data in set(InputDataStorage().values()):
+        input_data_tag = input_data.xml_tag()
+        # shape_tags.append(dmn_shape(300, 150 * index, input_data_tag.attrib['id']))
+        # index += 1
+        root.append(input_data_tag)
+
+    # dmndi_tag = etree.Element(etree.QName(dmndi, 'DMNDI'))
+    # dmn_diagram_tag = etree.Element(etree.QName(dmndi, 'DMNDiagram'))
+    # dmndi_tag.append(dmn_diagram_tag)
+    # map(dmndi_tag.append, shape_tags)
+
+    # for s in shape_tags:
+    #     dmn_diagram_tag.append(s)
+    #
+    # root.append(dmndi_tag)
+
     return root

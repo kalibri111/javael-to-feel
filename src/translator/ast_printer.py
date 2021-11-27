@@ -1,10 +1,11 @@
+from ANTLR_FEELParser import feelParser
 from ANTLR_FEELParser.feelVisitor import feelVisitor
 from ANTLR_JavaELParser.JavaELParser import JavaELParser
 from ANTLR_JavaELParser.JavaELParserVisitor import JavaELParserVisitor
 from loguru import logger
 
 logger = logger.opt(colors=True)
-logger.disable(__name__)
+# logger.disable(__name__)
 
 keywords = [
     JavaELParser.Not,
@@ -44,7 +45,7 @@ class JavaELTreePrinter(JavaELParserVisitor):
             return self.visitChildren(ctx)
 
     def visitTerminal(self, node):
-        logger.opt(colors=True).debug(f'terminal: <red>{id(node)}</red> <green>{node.getText()}</green> dmn: {hasattr(node, "colors")}')
+        logger.opt(colors=True).info(f'JavaELTreePrinter visits Terminal: <red>{id(node)}</red> <green>{node.getText()}</green> dmn: {hasattr(node, "colors")}')
 
         if node.symbol.type in keywords:
             self.result.append(' ')
@@ -54,52 +55,52 @@ class JavaELTreePrinter(JavaELParserVisitor):
             self.result.append(node.getText())
 
     def visitPrimitive(self, ctx:JavaELParser.PrimitiveContext):
-        logger.opt(colors=True).debug(f'primitive: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
+        logger.opt(colors=True).info(f'JavaELTreePrinter visits Primitive: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
         if not self.lastContextWasDMN():
             return self.passIfNoDMN(ctx)
 
     def visitValue(self, ctx:JavaELParser.ValueContext):
-        logger.opt(colors=True).debug(f'value: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
+        logger.opt(colors=True).info(f'JavaELTreePrinter visits Value: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
         if not self.lastContextWasDMN():
             return self.passIfNoDMN(ctx)
 
     def visitBase(self, ctx:JavaELParser.BaseContext):
-        logger.opt(colors=True).debug(f'base: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
+        logger.opt(colors=True).info(f'JavaELTreePrinter visits Base: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
         if not self.lastContextWasDMN():
             return self.passIfNoDMN(ctx)
 
     def visitMember(self, ctx:JavaELParser.MemberContext):
-        logger.opt(colors=True).debug(f'member: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
+        logger.opt(colors=True).info(f'JavaELTreePrinter visits Member: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
         if not self.lastContextWasDMN():
             return self.passIfNoDMN(ctx)
 
     def visitAlgebraic(self, ctx:JavaELParser.AlgebraicContext):
-        logger.opt(colors=True).debug(f'algebraic: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
+        logger.opt(colors=True).info(f'JavaELTreePrinter visits Algebraic: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
         if not self.lastContextWasDMN():
             return self.passIfNoDMN(ctx)
 
     def visitRelation(self, ctx:JavaELParser.RelationContext):
-        logger.opt(colors=True).debug(f'relation: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
+        logger.opt(colors=True).info(f'JavaELTreePrinter visits Relation: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
         if not self.lastContextWasDMN():
             return self.passIfNoDMN(ctx)
 
     def visitEquality(self, ctx:JavaELParser.EqualityContext):
-        logger.opt(colors=True).debug(f'equality: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
+        logger.opt(colors=True).info(f'JavaELTreePrinter visits Equality: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
         if not self.lastContextWasDMN():
             return self.passIfNoDMN(ctx)
 
     def visitTerm(self, ctx:JavaELParser.TermContext):
-        logger.opt(colors=True).debug(f'term: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
+        logger.opt(colors=True).info(f'JavaELTreePrinter visits Term: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
         if not self.lastContextWasDMN():
             return self.passIfNoDMN(ctx)
 
     def visitExpression(self, ctx:JavaELParser.ExpressionContext):
-        logger.opt(colors=True).debug(f'expression: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
+        logger.opt(colors=True).info(f'JavaELTreePrinter visits Expression: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
         if not self.lastContextWasDMN():
             return self.passIfNoDMN(ctx)
 
     def visitTernary(self, ctx:JavaELParser.TernaryContext):
-        logger.opt(colors=True).debug(f'ternary: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
+        logger.opt(colors=True).info(f'JavaELTreePrinter visits Ternary: <red>{id(ctx)}</red> <green>{ctx.getText()}</green> dmn: {hasattr(ctx, "colors")}')
         if not self.lastContextWasDMN():
             return self.passIfNoDMN(ctx)
 
@@ -122,6 +123,9 @@ class FEELTreePrinter(feelVisitor):
 
     def visitTerminal(self, node):
         self.result.append(node.getText())
+
+    def visitParametersPositional(self, ctx):
+        self.result.append(ctx.getText())
 
     @property
     def tree_expression(self):

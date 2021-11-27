@@ -198,6 +198,7 @@ class DMNTreeBuilder(JavaELParserVisitor):
                     maybe_operator.visited = True
                     maybe_operand.visited = True
 
+                    # TODO: maybe_operand захватывает все выражение, а не только операнд
                     ast_printer.visit(maybe_operand)
                     new_child_id = 'dmn' + str(
                         self.add_unary_children(ast_printer.tree_expression, [maybe_operand], maybe_operator))
@@ -241,7 +242,7 @@ def printDMNTree(dmntree: DMNTree) -> None:
 def _printDMNTree(node: DMNTreeNode) -> None:
     if isinstance(node, ExpressionDMN):
         logger.debug(
-            f"ExpressionDMN node {id(node)} expression: {node.expression}, children: {len(node.children)}")
+            f"ExpressionDMN node {id(node)} expression: {node.expression}, children: {[node.children]}")
     elif isinstance(node, OperatorDMN):
         logger.debug(
             f"OperatorDMN node {id(node)} operator: {node.operator}")

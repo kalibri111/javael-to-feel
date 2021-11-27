@@ -9,3 +9,11 @@ class Singleton(type):
 
 class OperatorsStorage(dict, metaclass=Singleton):
     pass
+
+
+class DependenceStorage(dict, metaclass=Singleton):
+    pass
+
+
+class InputDataStorage(dict, metaclass=Singleton):
+    pass

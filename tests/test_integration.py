@@ -8,9 +8,9 @@ XSD_PATH = 'res/xsd/dmn.xsd'
 class TestIntegration(unittest.TestCase):
     def setUp(self) -> None:
         self.java_el_expressions = [
-            "empty field",
+            # "empty field",
             # "! field",
-            # "!(empty securityDataProvider.loggedInUser or (securityDataProvider.hasRole('tehprisEE_portalUserRegistrator')) or (securityDataProvider.hasRole('tehprisEE_ZayavkaTP')) and empty fields.id)",
+            "!((securityDataProvider.hasRole('tehprisEE_portalUserRegistrator')) or (securityDataProvider.hasRole('tehprisEE_ZayavkaTP')) and empty fields.id)",
             # "fields['SignFL'] eq true or fields['SignUL'] eq true"
         ]
         # self.xmlschema = etree.XMLSchema(etree.parse(XSD_PATH))
