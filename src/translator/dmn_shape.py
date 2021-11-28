@@ -5,6 +5,9 @@ from collections import namedtuple
 from src.translator.xml_conf import *
 from lxml import etree
 from src.translator.dmn_tree import DMNTreeNode
+from loguru import logger
+
+logger.opt(colors=True)
 
 DEFAULT_SHAPE_WIDTH = 180
 DEFAULT_SHAPE_HEIGHT = 80
@@ -30,16 +33,18 @@ class DMNShape:
 
 class DMNShapeOrdered:
     def __init__(self, s_id: str, s_x: int, s_y: int, level: int):
+        logger.debug(f'Constructor DMNShapeOrdered called with params: [id: {s_id}, x: {s_x}, y:{s_y}, level: {level}]')
         self.shape = DMNShape(s_x, s_y, s_id)
-        self.children = []
-        self.height = level
+        self._children = []
+        self.tree_height = level
 
     def append(self, s_id: str):
         # предполагаю, что больше CHILD_CNT_MAX детей у ноды нет, высота дерева не более NODE_HEIGHT_MAX
-        new_x = ...
-        new_y = ...
-        self.children.append(DMNShapeOrdered(s_id, new_x, new_y, self.height + 1))
+        new_x = self.shape.x + DEFAULT_SHAPE_WIDTH * len(self._children) * self.tree_height
+        new_y = self.shape.y - DEFAULT_SHAPE_HEIGHT - 10
+        self._children.append(DMNShapeOrdered(s_id, new_x, new_y, self.tree_height + 1))
 
+    @property
     def shape_tag(self):
         tag = etree.Element(etree.QName(dmndi, 'DMNShape'), dmnElementRef=self.shape.id)
         bound = etree.SubElement(
@@ -51,6 +56,10 @@ class DMNShapeOrdered:
             y=str(self.shape.y)
         )
         return tag
+
+    @property
+    def children(self):
+        return self._children
 
 
 def build_shape_xml(root: DMNShapeOrdered) -> etree.Element:
@@ -89,8 +98,8 @@ def waypoint_between(shape_from: DMNShapeOrdered, shape_to: DMNShapeOrdered) -> 
     y_to = shape_to.shape.y - DEFAULT_SHAPE_WIDTH / 2
 
     edge_tag = etree.Element(etree.QName(dmndi, 'DMNEdge'), id=edge_id(), dmnElementRef=shape_from.shape.id)
-    from_waypoint = etree.Element(etree.QName(dmndi, 'waypoint'), x=x_from, y=y_from)
-    to_waypoint = etree.Element(etree.QName(dmndi, 'waypoint'), x=x_to, y=y_to)
+    from_waypoint = etree.Element(etree.QName(di, 'waypoint'), x=str(x_from), y=str(y_from))
+    to_waypoint = etree.Element(etree.QName(di, 'waypoint'), x=str(x_to), y=str(y_to))
 
     edge_tag.append(from_waypoint)
     edge_tag.append(to_waypoint)
@@ -105,12 +114,12 @@ def build_shape_xml_algorithm(tree_node: DMNShapeOrdered, dmn_diagram_tag: etree
     :param dmn_diagram_tag: тег - предок всех нод
     :return:
     """
-    parent_shape = tree_node.shape_tag()
+    parent_shape = tree_node.shape_tag
     dmn_diagram_tag.append(parent_shape)
 
-#     creating all waypoint
+    #     creating all waypoint
     for child in tree_node.children:
-        dmn_diagram_tag.append(waypoint_between(parent_shape, child))
+        dmn_diagram_tag.append(waypoint_between(tree_node, child))
 
     for child in tree_node.children:
         build_shape_xml_algorithm(child, dmn_diagram_tag)

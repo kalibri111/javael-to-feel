@@ -1,3 +1,4 @@
+import queue
 import string
 import random
 import re
@@ -682,11 +683,101 @@ class InputData:
             for _ in range(DecisionTable.RANDOM_ID_LEN)
         )
 
+    @property
+    def tag_id(self):
+        return self._tag_id
+
+    @property
     def href(self):
         return '#' + self._tag_id
 
 
+class ShapesDrawer:
+    @classmethod
+    def draw(cls, tree: DMNTree) -> etree.Element:
+        shape_ordered_root = cls.extract_dependency(tree.root)
+        shape_tag = build_shape_xml(shape_ordered_root)
+        return shape_tag
+
+    @classmethod
+    def related_tags(cls, node: DMNTreeNode) -> List[etree.Element]:
+        if isinstance(node, ExpressionDMN):
+            return [DependenceStorage()['dmn' + str(id(c))] for c in node.children]
+        elif isinstance(node, OperatorDMN):
+            dependents = []
+
+            # все зависимые dmn диаграммы
+            for c in node.children:
+                if 'dmn' + str(id(c)) in DependenceStorage().keys():
+                    dependents.append(DependenceStorage()['dmn' + str(id(c))])
+            # все зависимые inputData
+            for c in node.children:
+                if 'dmn' + str(id(c)) in InputDataStorage().keys():
+                    dependents.append(InputDataStorage()['dmn' + str(id(c))].tag_id)
+            return dependents
+
+    @classmethod
+    def extract_dependency(cls, root: DMNTreeNode) -> DMNShapeOrdered:
+        """
+        BFS c двумя очередями
+        :param decisions:
+        :param root:
+        :param shape_node:
+        :return:
+        """
+        dmn_nodes_queue = queue.Queue()
+        shape_nodes_queue = queue.Queue()
+
+        shape_root_tag = cls.related_tags(root)
+
+        if len(shape_root_tag) != 1:
+            raise ValueError(f'ShapesDrawer.draw wrong root count to initialize: {len(shape_root_tag)}')
+
+        shape_root = DMNShapeOrdered(shape_root_tag[0], CENTER_X, CENTER_Y, 0)
+
+        for c in root.children:
+            dmn_nodes_queue.put(c)
+
+        shape_nodes_queue.put(shape_root)
+
+        while not dmn_nodes_queue.empty():
+            dmn_tag = dmn_nodes_queue.get()
+
+            shape_children = cls.related_tags(dmn_tag)
+            shape_parent = shape_nodes_queue.get()
+
+            for c in shape_children:
+                shape_parent.append(c)
+
+            for c in shape_parent.children:
+                shape_nodes_queue.put(c)
+
+            for d in dmn_tag.children:
+                dmn_nodes_queue.put(d)
+        return shape_root
+
+
 class DMN_XML:
+    @classmethod
+    def build_xml(cls, drd_id: str, decisions: List[etree.Element]):
+        NSMAP = {'dmndi': dmndi, 'dc': dc, 'biodi': biodi, 'di': di, }
+        root = etree.Element('definitions', xmlns=xmlns, nsmap=NSMAP)
+        attributes = root.attrib
+        attributes['name'] = 'DRD'
+        attributes['namespace'] = namespace
+        attributes['exporter'] = exporter
+        attributes['exporterVersion'] = exporterVersion
+
+        for d in decisions:
+            if d.tag == 'decision':
+                root.append(d)
+
+        for input_data in set(InputDataStorage().values()):
+            input_data_tag = input_data.xml_tag()
+            root.append(input_data_tag)
+
+        return root
+
     @classmethod
     def visit(cls, tree: DMNTree) -> etree.Element:
         """
@@ -695,60 +786,29 @@ class DMN_XML:
         """
         root = tree.root
         decisions = []
-        shape_root = None
-        cls._preorder_traversal(root, decisions, shape_root)
-        xml_root_tag = build_xml('drd_id', decisions)
-
-        if shape_root is None:
-            logger.error(f"DMN_XML failure to build Shapes")
-            raise ValueError('empty shapes')
-
-        shapes_tag = build_shape_xml(shape_root)
-        xml_root_tag.append(shapes_tag)
-        return xml_root_tag
+        cls.inorder_travers(root, decisions)
+        return cls.build_xml('drd_id', decisions)
 
     @classmethod
-    def _preorder_traversal(cls, node: DMNTreeNode, decisions: List[etree.Element],
-                            shape_node: typing.Union[DMNShapeOrdered, None]):
-        """
-        Обход preorder, построение XML онлайн
-        :param node:
-        :param decisions:
-        :return:
-        """
+    def inorder_travers(cls, node: DMNTreeNode, decisions: List[etree.Element]):
+        if len(node.children):
+            for child in node.children:
+                cls.inorder_travers(child, decisions)
 
         # constraint dmn node
         if isinstance(node, OperatorDMN):
-            related_shapes = cls.visitConstraint(node, decisions)
-            shape_node = cls.add_children_to_shape_or_init(related_shapes, shape_node)
-
+            DMNTreeVisitor.visit_constraint(node, decisions)
         elif isinstance(node, ExpressionDMN):
             # expression node
-            related_shapes = cls.visitExpression(node, decisions)
-            shape_node = cls.add_children_to_shape_or_init(related_shapes, shape_node)
+            DMNTreeVisitor.visit_expression(node, decisions)
         else:
             raise ValueError('XML builder got wrong DMN node type')
 
-        if len(node.children):
-            for child in node.children:
-                cls._preorder_traversal(child, decisions, shape_node)
 
+class DMNTreeVisitor:
     @classmethod
-    def add_children_to_shape_or_init(cls, related_shapes, shape_node):
-        if shape_node is None:
-            #         должен быть только один элемент в related_shapes
-            if len(related_shapes) != 1:
-                raise ValueError('DMN_XML.visit more than one root to initialize')
-            shape_node = DMNShapeOrdered(related_shapes[0].id, CENTER_X, CENTER_Y, 0)
-        else:
-            for i in related_shapes:
-                shape_node.append(i.id)
-        return shape_node
-
-    # TODO: какой лучше возвращаемый тип?
-    @classmethod
-    def visitExpression(cls, node: ExpressionDMN, decision_list: List[etree.Element]) -> List[etree.Element]:
-        logger.debug(f'DMN_XML constructs xml from <red>expression</red>: <green>{node.expression}</green>')
+    def visit_expression(cls, node: ExpressionDMN, decision_list: List[etree.Element]) -> None:
+        logger.debug(f'DMNTreeVisitor constructs xml from <red>expression</red>: <green>{node.expression}</green>')
 
         # dependents = ['#' + DependenceStorage()['dmn' + str(id(c))] for c in node.children]
         dependents = []
@@ -776,7 +836,7 @@ class DMN_XML:
 
                     InputDataStorage()[self_id] = new_input_data
 
-                    input_data_hrefs.append(new_input_data.href())
+                    input_data_hrefs.append(new_input_data.href)
                     input_data_tags.append(new_input_data)
             else:
                 inputs.add(input_data_candidate)
@@ -787,24 +847,22 @@ class DMN_XML:
 
             if new_table is None:
                 logger.error(
-                    f'DMN_XML constructs xml from <red>expression</red>: <green>{node.expression}</green> failure')
+                    f'DMNTreeVisitor constructs xml from <red>expression</red>: <green>{node.expression}</green> failure')
                 raise ValueError('DecisionTable is None')
 
             logger.debug(f'GENERATED XML FROM EXPRESSION')
             logger.debug(f'Expression: <red>{node.expression}</red>')
             logger.opt(colors=False).debug(f'\n{etree.tostring(new_table, pretty_print=True).decode("UTF-8")}')
             decision_list.append(new_table)
-            return [new_table]
         else:
             logger.debug(f'DMN_XML constructs inputData tags: {input_data_hrefs}')
             # добавление inputData объекта в decision_list, предполагаю, что они тут единственные операнды
             for input_data in input_data_tags:
                 decision_list.append(input_data.xml_tag())
-            return input_data_tags
 
     @classmethod
-    def visitConstraint(cls, node: OperatorDMN, decision_list: List[etree.Element]) -> List[etree.Element]:
-        logger.debug(f'DMN_XML constructs xml from <red>constraint</red>: <green>{node.operator}</green>')
+    def visit_constraint(cls, node: OperatorDMN, decision_list: List[etree.Element]) -> None:
+        logger.debug(f'DMNTreeVisitor constructs xml from <red>constraint</red>: <green>{node.operator}</green>')
 
         dependents = []
 
@@ -815,7 +873,7 @@ class DMN_XML:
         # все зависимые inputData
         for c in node.children:
             if 'dmn' + str(id(c)) in InputDataStorage().keys():
-                dependents.append(InputDataStorage()['dmn' + str(id(c))].href())
+                dependents.append(InputDataStorage()['dmn' + str(id(c))].href)
 
         self_id = 'dmn' + str(id(node))
 
@@ -825,7 +883,7 @@ class DMN_XML:
 
             if new_table is None:
                 logger.error(
-                    f'DMN_XML constructs xml from <red>constraint</red>: <green>{node.operator}</green> failure')
+                    f'DMNTreeVisitor constructs xml from <red>constraint</red>: <green>{node.operator}</green> failure')
                 raise ValueError('DecisionTable is None')
 
             decision_list.append(new_table)
@@ -837,7 +895,7 @@ class DMN_XML:
 
             if new_table is None:
                 logger.error(
-                    f'DMN_XML constructs xml from <red>constraint</red>: <green>{node.operator}</green> failure')
+                    f'DMNTreeVisitor constructs xml from <red>constraint</red>: <green>{node.operator}</green> failure')
                 raise ValueError('DecisionTable is None')
 
             decision_list.append(new_table)
@@ -845,47 +903,9 @@ class DMN_XML:
         logger.debug(f'GENERATED XML FROM CONSTRAINT')
         logger.debug(f'Constraint: <red>{node.operator}</red>')
         logger.opt(colors=False).debug(f'\n{etree.tostring(new_table, pretty_print=True).decode("UTF-8")}')
-        return [new_table]
 
 
 def dmn_shape(coord_x: int, coord_y: int, element_id: str):
     tag = etree.Element(etree.QName(dmndi, 'DMNShape'), dmnElementRef=element_id)
     bound = etree.SubElement(tag, etree.QName(dc, 'Bounds'), height='80', width='180', x=str(coord_x), y=str(coord_y))
     return tag
-
-
-def build_xml(drd_id: str, decisions: List[etree.Element]):
-    NSMAP = {'dmndi': dmndi, 'dc': dc, 'biodi': biodi, 'di': di, }
-    root = etree.Element('definitions', xmlns=xmlns, nsmap=NSMAP)
-    attributes = root.attrib
-    attributes['name'] = 'DRD'
-    attributes['namespace'] = namespace
-    attributes['exporter'] = exporter
-    attributes['exporterVersion'] = exporterVersion
-
-    index = 1
-    shape_tags = []
-
-    for d in decisions:
-        if d.tag == 'decision':
-            # shape_tags.append(dmn_shape(300, 150 * index, d.attrib['id']))
-            # index += 1
-            root.append(d)
-
-    for input_data in set(InputDataStorage().values()):
-        input_data_tag = input_data.xml_tag()
-        # shape_tags.append(dmn_shape(300, 150 * index, input_data_tag.attrib['id']))
-        # index += 1
-        root.append(input_data_tag)
-
-    # dmndi_tag = etree.Element(etree.QName(dmndi, 'DMNDI'))
-    # dmn_diagram_tag = etree.Element(etree.QName(dmndi, 'DMNDiagram'))
-    # dmndi_tag.append(dmn_diagram_tag)
-    # map(dmndi_tag.append, shape_tags)
-
-    # for s in shape_tags:
-    #     dmn_diagram_tag.append(s)
-    #
-    # root.append(dmndi_tag)
-
-    return root

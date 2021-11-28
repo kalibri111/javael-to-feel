@@ -45,16 +45,16 @@ class TestTreeTraverses(unittest.TestCase):
     def test_find_sub_dmn_equality(self):
         t = tree(sub_dmn_equality)
         dmntree = DMNTree(t)
-        self.assertEqual(1, len(dmntree.root.children))
-        self.assertEqual('(firstandsecond)', dmntree.root.children[0].expression)
-        self.assertEqual('==', dmntree.root.children[0].operator.getText())
+        self.assertEqual(1, len(dmntree.root._children))
+        self.assertEqual('(firstandsecond)', dmntree.root._children[0].expression)
+        self.assertEqual('==', dmntree.root._children[0].operator.getText())
 
     def test_find_sub_dmn_empty(self):
         t = tree(sub_dmn_empty)
         dmntree = DMNTree(t)
-        self.assertEqual(1, len(dmntree.root.children))
-        self.assertEqual('(firstandsecond)', dmntree.root.children[0].expression)
-        self.assertEqual('empty', dmntree.root.children[0].operator.getText())
+        self.assertEqual(1, len(dmntree.root._children))
+        self.assertEqual('(firstandsecond)', dmntree.root._children[0].expression)
+        self.assertEqual('empty', dmntree.root._children[0].operator.getText())
 
     def test_find_sub_dmn_empty(self):
         t = tree(sub_dmn_not_empty)
@@ -62,13 +62,13 @@ class TestTreeTraverses(unittest.TestCase):
 
         printDMNTree(dmntree)
 
-        self.assertEqual(1, len(dmntree.root.children))
+        self.assertEqual(1, len(dmntree.root._children))
 
-        self.assertEqual('!empty(firstandsecond)', dmntree.root.children[0].expression)
-        self.assertEqual('!', dmntree.root.children[0].operator.getText())
+        self.assertEqual('!empty(firstandsecond)', dmntree.root._children[0].expression)
+        self.assertEqual('!', dmntree.root._children[0].operator.getText())
 
-        self.assertEqual('(firstandsecond)', dmntree.root.children[0].children[0].expression)
-        self.assertEqual('empty', dmntree.root.children[0].children[0].operator.getText())
+        self.assertEqual('(firstandsecond)', dmntree.root._children[0]._children[0].expression)
+        self.assertEqual('empty', dmntree.root._children[0]._children[0].operator.getText())
 
     def test_find_sub_dmn_complex(self):
         t = tree(sub_dmn_complex)

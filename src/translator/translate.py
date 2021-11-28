@@ -8,7 +8,7 @@ from src.translator.node_algorithm import tree
 from src.translator.to_knf_zipper import zipFormula, unpack, concatWithOr
 from loguru import logger
 
-from src.translator.xml_packer import DMN_XML
+from src.translator.xml_packer import DMN_XML, ShapesDrawer
 from src.translator.zip_storage import OperatorsStorage
 
 
@@ -36,18 +36,19 @@ def translate(java_el_expr: str) -> DMNTree:
     return dmn_tree
 
 
-def xml_from_dmntree(dmn_tree_translated: DMNTree, xml_out_path: str) -> None:
+def xml_from_dmntree(dmn_tree_translated_root: DMNTree, xml_out_path: str) -> None:
     """
     Builds xml representation of DMN structure
-    :param dmn_tree_translated: represents FEEL expressions, connected by non-logical operators
+    :param dmn_tree_translated_root: represents FEEL expressions, connected by non-logical operators
     :param xml_out_path: path where to build xml
     :return: None
     """
-    dmn_xml_root = DMN_XML().visit(dmn_tree_translated)
+    dmn_xml_root = DMN_XML().visit(dmn_tree_translated_root)
+    shapes_tag_root = ShapesDrawer().draw(dmn_tree_translated_root)
 
-    etree.ElementTree(dmn_xml_root).write(xml_out_path + str(id(dmn_tree_translated)) + '.xml', pretty_print=True)
-    # with open(xml_out_path, 'w') as xml_out:
-    #     xml_out.write(etree.tostring(dmn_xml_root, pretty_print=True))
+    dmn_xml_root.append(shapes_tag_root)
+
+    etree.ElementTree(dmn_xml_root).write(xml_out_path + str(id(dmn_tree_translated_root)) + '.xml', pretty_print=True)
 
 
 def translateDMNReadyinDMNTree(dmntree: DMNTree) -> None:

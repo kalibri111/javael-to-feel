@@ -12,6 +12,9 @@ class OperatorsStorage(dict, metaclass=Singleton):
 
 
 class DependenceStorage(dict, metaclass=Singleton):
+    """
+    id of DMN node to related tables
+    """
     pass
 
 
