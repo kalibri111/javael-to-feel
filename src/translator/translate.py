@@ -9,7 +9,7 @@ from src.translator.to_knf_zipper import zipFormula, unpack, concatWithOr
 from loguru import logger
 
 from src.translator.xml_packer import DMN_XML, ShapesDrawer
-from src.translator.zip_storage import OperatorsStorage
+from src.translator.zip_storage import OperatorsStorage, TableToDepTables, TableToDepInputDatas, InputDataToInfoReq
 
 
 def translate(java_el_expr: str) -> DMNTree:
@@ -44,6 +44,11 @@ def xml_from_dmntree(dmn_tree_translated_root: DMNTree, xml_out_path: str) -> No
     :return: None
     """
     dmn_xml_root = DMN_XML().visit(dmn_tree_translated_root)
+
+    logger.debug(f"DependenceStorage has state: {TableToDepTables()}")
+    logger.debug(f"InputDataStorage has state: {TableToDepInputDatas()}")
+    logger.debug(f"InputDataToInfoReq has state: {InputDataToInfoReq()}")
+
     shapes_tag_root = ShapesDrawer().draw(dmn_tree_translated_root)
 
     dmn_xml_root.append(shapes_tag_root)

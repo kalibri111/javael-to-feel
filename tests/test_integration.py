@@ -10,8 +10,8 @@ class TestIntegration(unittest.TestCase):
         self.java_el_expressions = [
             # "empty field",
             # "! field",
-            "!((securityDataProvider.hasRole('tehprisEE_portalUserRegistrator')) or (securityDataProvider.hasRole('tehprisEE_ZayavkaTP')) and empty fields.id)",
-            # "fields['SignFL'] eq true or fields['SignUL'] eq true"
+            # "!((securityDataProvider.hasRole('tehprisEE_portalUserRegistrator')) or (securityDataProvider.hasRole('tehprisEE_ZayavkaTP')) and empty fields.id)",
+            "fields['SignFL'] eq true or fields['SignUL'] eq true"
         ]
         # self.xmlschema = etree.XMLSchema(etree.parse(XSD_PATH))
 

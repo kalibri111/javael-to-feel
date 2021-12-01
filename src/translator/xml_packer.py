@@ -9,7 +9,7 @@ from enum import Enum
 from collections import namedtuple
 from src.translator.dmn_shape import DMNShapeOrdered, DMNShape, CENTER_X, CENTER_Y, build_shape_xml
 from src.translator.dmn_tree import DMNTree, DMNTreeNode, OperatorDMN, ExpressionDMN
-from src.translator.zip_storage import DependenceStorage, InputDataStorage
+from src.translator.zip_storage import TableToDepTables, TableToDepInputDatas, InputDataToInfoReq
 from src.translator.knf_converter import toDMNReady
 from typing import Dict, Iterable, Set, List, Collection
 from loguru import logger
@@ -194,16 +194,21 @@ class DecisionTable:
     OPERATION_RESULT_LABEL = 'operation_result'
 
     @classmethod
-    def newInformationRequirement(cls, dependence_href: str):
+    def newInformationRequirement(cls, dependence_href: str) -> etree.Element:
         info_requirement_tag = cls.informationRequirement(cls._constructInformationRequirementId())
         req_input_tag = cls.requiredInput(dependence_href)
         info_requirement_tag.append(req_input_tag)
+
+        InputDataToInfoReq().add(dependence_href.replace('#', ''), info_requirement_tag)
+
         return info_requirement_tag
 
     @classmethod
     def newTable(cls, inputs: Collection, output_name: str, rules_rows: Iterable[RuleTag], dependentDMNs: List[str],
                  dmn_id: str, input_data_hrefs: List[str] = None) -> etree.Element:
-        decision_tag = cls.decision(cls._constructDecisionId(dmn_id), 'test_name')
+        decision_tag = cls.decision(cls._constructDecisionId(dmn_id), dmn_id)
+
+        logger.debug(f'DecisionTable from newTable got dependentDMNs: {dependentDMNs}')
 
         for dependence in dependentDMNs:
             info_requirement_tag = cls.newInformationRequirement(dependence)
@@ -657,7 +662,7 @@ class DecisionTable:
     def _constructDecisionId(dmn_id: str) -> str:
         new_id = 'Decision_' + DecisionTable._constructIdSuffix()
 
-        DependenceStorage()[dmn_id] = new_id
+        TableToDepTables()[dmn_id] = new_id
         return new_id
 
     @staticmethod
@@ -702,18 +707,22 @@ class ShapesDrawer:
     @classmethod
     def related_tags(cls, node: DMNTreeNode) -> List[etree.Element]:
         if isinstance(node, ExpressionDMN):
-            return [DependenceStorage()['dmn' + str(id(c))] for c in node.children]
+            return [TableToDepTables()['dmn' + str(id(c))] for c in node.children]
         elif isinstance(node, OperatorDMN):
             dependents = []
 
             # все зависимые dmn диаграммы
             for c in node.children:
-                if 'dmn' + str(id(c)) in DependenceStorage().keys():
-                    dependents.append(DependenceStorage()['dmn' + str(id(c))])
+                if 'dmn' + str(id(c)) in TableToDepTables().keys():
+                    dependents.append(TableToDepTables()['dmn' + str(id(c))])
             # все зависимые inputData
             for c in node.children:
-                if 'dmn' + str(id(c)) in InputDataStorage().keys():
-                    dependents.append(InputDataStorage()['dmn' + str(id(c))].tag_id)
+                if 'dmn' + str(id(c)) in TableToDepInputDatas().keys():
+                    dependents.extend(
+                        [
+                            i.tag_id for i in TableToDepInputDatas()['dmn' + str(id(c))]
+                        ]
+                    )
             return dependents
 
     @classmethod
@@ -772,7 +781,12 @@ class DMN_XML:
             if d.tag == 'decision':
                 root.append(d)
 
-        for input_data in set(InputDataStorage().values()):
+        input_data_values = []
+
+        for i in TableToDepInputDatas().values():
+            input_data_values.extend(i)
+
+        for input_data in set(input_data_values):
             input_data_tag = input_data.xml_tag()
             root.append(input_data_tag)
 
@@ -815,12 +829,14 @@ class DMNTreeVisitor:
 
         # все зависимые dmn диаграммы
         for c in node.children:
-            if 'dmn' + str(id(c)) in DependenceStorage().keys():
-                dependents.append('#' + DependenceStorage()['dmn' + str(id(c))])
+            if 'dmn' + str(id(c)) in TableToDepTables().keys():
+                dependents.append(TableToDepTables()['dmn' + str(id(c))])
         # все зависимые inputData
         for c in node.children:
-            if 'dmn' + str(id(c)) in InputDataStorage().keys():
-                dependents.append(InputDataStorage()['dmn' + str(id(c))].href())
+            if 'dmn' + str(id(c)) in TableToDepInputDatas().keys():
+                dependents.append(TableToDepInputDatas()['dmn' + str(id(c))].href())
+
+        logger.debug(f'DMNTreeVisitor from visit_expression found dependencies: {dependents}')
 
         self_id = 'dmn' + str(id(node))
 
@@ -830,16 +846,19 @@ class DMNTreeVisitor:
         input_data_tags = []
 
         for input_data_candidate in DmnElementsExtracter.getInputs(node.expression):
-            if input_data_candidate not in InputDataStorage():
+            if input_data_candidate not in TableToDepInputDatas():
                 if 'dmn' not in input_data_candidate:
                     new_input_data = InputData(input_data_candidate)
 
-                    InputDataStorage()[self_id] = new_input_data
+                    if self_id not in TableToDepInputDatas().keys():
+                        TableToDepInputDatas()[self_id] = [new_input_data]
+                    else:
+                        TableToDepInputDatas()[self_id].append(new_input_data)
 
                     input_data_hrefs.append(new_input_data.href)
                     input_data_tags.append(new_input_data)
-            else:
-                inputs.add(input_data_candidate)
+            # else:
+            inputs.add(input_data_candidate)
 
         if inputs:
             new_table = DecisionTable.from_expression(node.expression, inputs, input_data_hrefs, 'output_name here',
@@ -868,12 +887,14 @@ class DMNTreeVisitor:
 
         # все зависимые dmn диаграммы
         for c in node.children:
-            if 'dmn' + str(id(c)) in DependenceStorage().keys():
-                dependents.append('#' + DependenceStorage()['dmn' + str(id(c))])
+            if 'dmn' + str(id(c)) in TableToDepTables().keys():
+                dependents.append(TableToDepTables()['dmn' + str(id(c))])
         # все зависимые inputData
         for c in node.children:
-            if 'dmn' + str(id(c)) in InputDataStorage().keys():
-                dependents.append(InputDataStorage()['dmn' + str(id(c))].href)
+            if 'dmn' + str(id(c)) in TableToDepInputDatas().keys():
+                dependents.extend([i.href for i in TableToDepInputDatas()['dmn' + str(id(c))]])
+
+        logger.debug(f'DMNTreeVisitor from visit_constraint found dependencies: {dependents}')
 
         self_id = 'dmn' + str(id(node))
 
