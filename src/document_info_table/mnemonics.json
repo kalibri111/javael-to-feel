@@ -1,0 +1,11 @@
+{
+  "fields[\"p_TypeTP\"].Code": "fields_At_p_Type_Code",
+  "fields['p_TypeTP'].Code": "fields_At_p_Type_Code",
+  "fields[\"p_TimeTPType\"].Code": "fields_At_p_TimeTPType_Code",
+  "fields['p_TimeTPType'].Code": "fields_At_p_TimeTPType_Code",
+  "fields[\"p_DeviceAddrMatchWith\"].Code": "fields_At_p_DeviceAddrMatchWith_Code",
+  "fields['p_DeviceAddrMatchWith'].Code": "fields_At_p_DeviceAddrMatchWith_Code",
+  "fields.ApplicantType.value.fields.Code": "fields_ApplicantType_value_fields_Code",
+  "securityDataProvider.hasRole(\"tehprisEE_ZayavkaTP\")": "securityDataProvider_hasRole_tehprisEE_ZayavkaTP",
+  "securityDataProvider.hasRole('tehprisEE_ZayavkaTP')": "securityDataProvider_hasRole_tehprisEE_ZayavkaTP"
+}

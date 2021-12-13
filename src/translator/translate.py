@@ -36,9 +36,9 @@ def translate(java_el_expr: str) -> DMNTree:
     return dmn_tree
 
 
-def xml_from_dmntree(dmn_tree_translated_root: DMNTree, xml_out_path: str) -> None:
+def xml_from_dmntree(dmn_tree_translated_root: DMNTree, xml_out_path: str) -> str:
     """
-    Builds xml representation of DMN structure
+    Builds xml representation of DMN structure and returns path to generated file
     :param dmn_tree_translated_root: represents FEEL expressions, connected by non-logical operators
     :param xml_out_path: path where to build xml
     :return: None
@@ -53,7 +53,9 @@ def xml_from_dmntree(dmn_tree_translated_root: DMNTree, xml_out_path: str) -> No
 
     dmn_xml_root.append(shapes_tag_root)
 
-    etree.ElementTree(dmn_xml_root).write(xml_out_path + str(id(dmn_tree_translated_root)) + '.xml', pretty_print=True)
+    generated_filepath = xml_out_path + str(id(dmn_tree_translated_root)) + '.xml'
+    etree.ElementTree(dmn_xml_root).write(generated_filepath, pretty_print=True)
+    return generated_filepath
 
 
 def translateDMNReadyinDMNTree(dmntree: DMNTree) -> None:

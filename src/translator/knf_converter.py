@@ -1,6 +1,6 @@
-from typing import Dict, Set
+from typing import Set
 
-from src.dependencyTable.checkBrackets import *
+from src.document_info_table.legacy.checkBrackets import *
 import re
 from pyeda.boolalg import expr
 

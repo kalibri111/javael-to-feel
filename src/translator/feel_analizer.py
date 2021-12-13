@@ -17,7 +17,6 @@ def tree(expression: str) -> ParserRuleContext:
     return tree_returned.compilation_unit()
 
 
-# TODO: что считать input? nameRef или его часть?
 class FEELInputExtractor(feelVisitor):
     def __init__(self):
         super(FEELInputExtractor, self).__init__()
@@ -30,15 +29,19 @@ class FEELInputExtractor(feelVisitor):
             to_return.add(r.replace(' . ', '_').replace('(', '_').replace(')', '').replace(' ', ''))
         return to_return
 
-    def visitQualifiedName(self, ctx:feelParser.QualifiedNameContext):
-        p = FEELTreePrinter()
-        p.visit(ctx.parentCtx)
-        self.identifiers.add(p.tree_expression)
+    # def visitQualifiedName(self, ctx:feelParser.QualifiedNameContext):
+    #     p = FEELTreePrinter()
+    #     p.visit(ctx.parentCtx)
+    #     self.identifiers.add(p.tree_expression)
 
-    def visitFnInvocation(self, ctx:feelParser.FnInvocationContext):
-        p = FEELTreePrinter()
-        p.visit(ctx.parentCtx)
-        self.identifiers.add(p.tree_expression)
+    def visitTerminal(self, node):
+        if node.symbol.type == feelParser.Identifier:
+            self.identifiers.add(node.getText())
+
+    # def visitFnInvocation(self, ctx:feelParser.FnInvocationContext):
+    #     p = FEELTreePrinter()
+    #     p.visit(ctx.parentCtx)
+    #     self.identifiers.add(p.tree_expression)
 
 
 class FEELRuleExtractor(feelVisitor):

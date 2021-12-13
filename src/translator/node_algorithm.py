@@ -2,6 +2,7 @@ from antlr4 import *
 
 from ANTLR_JavaELParser.JavaELLexer import JavaELLexer
 from ANTLR_JavaELParser.JavaELParser import JavaELParser
+from .syntax_error_listener import JavaELSyntaxErrorHandler, JavaELSyntaxError
 from loguru import logger
 
 logger = logger.opt(colors=True)
@@ -69,9 +70,16 @@ def toParentTernaryDist(ctx: ParserRuleContext) -> int:
     return dist
 
 
-def tree(expression: str):
+def tree(expression: str) -> JavaELParser.ExpressionContext:
+    """
+    Build JavaEL AST, returns root, raises JavaELSyntaxError
+    :param expression:
+    :return:
+    """
     input_stream = InputStream(expression)
     lexer = JavaELLexer(input_stream)
-    tree_returned = JavaELParser(CommonTokenStream(lexer))
-    return tree_returned.ternary()
+    parser = JavaELParser(CommonTokenStream(lexer))
+    parser.addErrorListener(JavaELSyntaxErrorHandler())
+    tree_returned = parser.ternary()
+    return tree_returned
 

@@ -11,7 +11,8 @@ class TestIntegration(unittest.TestCase):
             # "empty field",
             # "! field",
             # "!((securityDataProvider.hasRole('tehprisEE_portalUserRegistrator')) or (securityDataProvider.hasRole('tehprisEE_ZayavkaTP')) and empty fields.id)",
-            "fields['SignFL'] eq true or fields['SignUL'] eq true"
+            # "fields['p_TypeTP'].Code eq '32896' and fields['p_TimeTPType'].Code eq '32898'",
+            '( securityDataProvider_hasRole_tehprisEE_ZayavkaTP and dmn4671452832 ) or ( securityDataProvider.hasRole("tehprisEE_portalUserRegistrator") ) or ( securityDataProvider.loggedInUser )',
         ]
         # self.xmlschema = etree.XMLSchema(etree.parse(XSD_PATH))
 

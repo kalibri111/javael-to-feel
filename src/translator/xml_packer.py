@@ -79,27 +79,30 @@ class DmnElementsExtracter:
         :param expr: {'... and ...',..}
         :return: [[operands], ..]
         """
+
+        # TODO: рекурсивный обход с or
         feel_ast = tree(expr)
         or_splitter = OrSplitter()
         or_splitter.visit(feel_ast)
         or_operands = or_splitter.result
-        if or_operands:
-            to_return = []
-            for or_op in or_operands:
-                or_op_ast = tree(or_op)
-                and_splitter = AndSplitter()
-                and_splitter.visit(or_op_ast)
-                if and_splitter.result:
-                    to_return.append(and_splitter.result)
-                else:
-                    scopes_deleter = ScopesDeleter()
-                    scopes_deleter.visit(or_op_ast)
-                    to_return.append(scopes_deleter.result)
-            return to_return
-        else:
+
+        if not or_operands:
             scopes_deleter = ScopesDeleter()
             scopes_deleter.visit(feel_ast)
-            return [scopes_deleter.result]
+            or_operands = scopes_deleter.result
+
+        to_return = []
+        for or_op in or_operands:
+            or_op_ast = tree(or_op)
+            and_splitter = AndSplitter()
+            and_splitter.visit(or_op_ast)
+            if and_splitter.result:
+                to_return.append(and_splitter.result)
+            else:
+                scopes_deleter = ScopesDeleter()
+                scopes_deleter.visit(or_op_ast)
+                to_return.append(scopes_deleter.result)
+        return to_return
 
     @classmethod
     def getInputs(cls, expr: str) -> Set[str]:
@@ -706,6 +709,11 @@ class ShapesDrawer:
 
     @classmethod
     def related_tags(cls, node: DMNTreeNode) -> List[etree.Element]:
+        """
+        Returns [node_tag_xml_id, ...(other related)]
+        :param node:
+        :return:
+        """
         if isinstance(node, ExpressionDMN):
             return [TableToDepTables()['dmn' + str(id(c))] for c in node.children]
         elif isinstance(node, OperatorDMN):
@@ -739,7 +747,11 @@ class ShapesDrawer:
 
         shape_root_tag = cls.related_tags(root)
 
-        if len(shape_root_tag) != 1:
+        # only one DMN table in expression
+        if len(shape_root_tag) == 0:
+            return DMNShapeOrdered(TableToDepTables()['dmn' + str(id(root))], CENTER_X, CENTER_Y, 0)
+
+        if len(shape_root_tag) > 1:
             raise ValueError(f'ShapesDrawer.draw wrong root count to initialize: {len(shape_root_tag)}')
 
         shape_root = DMNShapeOrdered(shape_root_tag[0], CENTER_X, CENTER_Y, 0)
