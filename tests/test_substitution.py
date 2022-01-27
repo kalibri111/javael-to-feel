@@ -1,6 +1,6 @@
 import unittest
 import json
-from src.document_info_table.info_table_generator import dictionary_init, substitute_mnemonic
+from src.document_info_table.report import dictionary_init, substitute_mnemonic
 
 
 class TestSubstitution(unittest.TestCase):

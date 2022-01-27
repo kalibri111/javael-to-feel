@@ -1,5 +1,5 @@
 import unittest
-from src.translator.knf_converter import toDMNReady
+from src.translator.knf.knf_converter import toDMNReady
 
 test_el = "empty fields.id or !securityDataProvider.hasRole('tehprisEE_User')or\
     (dataObjectController.instance.objectStatus.status.code eq 'ta03_Paused')or\

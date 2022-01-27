@@ -1,5 +1,5 @@
 import unittest
-from src.translator.feel_analizer import FEELInputExtractor, tree
+from src.translator.ast_algorithm.feel_analizer import FEELInputExtractor, tree
 
 
 class TestFEELInputExtractor(unittest.TestCase):

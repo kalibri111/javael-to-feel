@@ -1,4 +1,4 @@
-from src.translator.translate import translate, xml_from_dmntree
+from src.translator.ast_algorithm.el_expression_to_dmn_tree import translate, xml_from_dmntree
 
 EXPRESSION_EXAMPLE = ''
 XML_TEST_OUT_PATH = '/out/xml_example_out.xml'

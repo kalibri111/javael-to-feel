@@ -2,7 +2,7 @@ from antlr4 import *
 
 from ANTLR_JavaELParser.JavaELLexer import JavaELLexer
 from ANTLR_JavaELParser.JavaELParser import JavaELParser
-from .syntax_error_listener import JavaELSyntaxErrorHandler, JavaELSyntaxError
+from src.translator.ast_algorithm.syntax_error_listener import JavaELSyntaxErrorHandler
 from loguru import logger
 
 logger = logger.opt(colors=True)

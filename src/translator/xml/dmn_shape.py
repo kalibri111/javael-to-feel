@@ -2,12 +2,11 @@ import functools
 import random
 import string
 from collections import namedtuple
-from src.translator.xml_conf import *
+from src.translator.xml.xml_conf import *
 from lxml import etree
-from src.translator.dmn_tree import DMNTreeNode
 from loguru import logger
 
-from src.translator.zip_storage import InputDataToInfoReq
+from src.translator.singleton.singleton_storage import InputDataToInfoReq
 
 logger.opt(colors=True)
 

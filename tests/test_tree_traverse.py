@@ -1,11 +1,11 @@
 import unittest
 
-from src.translator.ast_printer import FEELTreePrinter
-from src.translator.dmn_tree import DMNTree, printDMNTree
-from src.translator.feel_translator import ToFEELConverter
-from src.translator.knf_converter import toDMNReady
-from src.translator.node_algorithm import tree, treeHeight
-from src.translator.to_knf_zipper import zipFormula, unpack, concatWithOr, SimpleOperandMarker, FormulaZipper
+from src.translator.visitors.feel_visitors import FEELTreePrinter
+from src.translator.dmn.dmn_tree_builder import DMNTree, printDMNTree
+from src.translator.visitors.javael_visitors import ToFEELConverter
+from src.translator.knf.knf_converter import toDMNReady
+from src.translator.ast_algorithm.javael_ast_algorithm import tree, treeHeight
+from src.translator.ast_algorithm.to_knf_zipper import zipFormula, unpack, concatWithOr, SimpleOperandMarker, FormulaZipper
 
 from loguru import logger
 
@@ -146,6 +146,7 @@ class TestTreeTraverses(unittest.TestCase):
         logger.debug(printer.tree_expression)
         self.assertEqual(printer.tree_expression,
                          "securityDataProvider.loggedInUser or  ( securityDataProvider.hasRole ( 'tehprisEE_portalUserRegistrator' )  )  or  ( securityDataProvider.hasRole ( 'tehprisEE_ZayavkaTP' )  )  and  empty fields.id")
+
 
 if __name__ == '__main__':
     unittest.main()

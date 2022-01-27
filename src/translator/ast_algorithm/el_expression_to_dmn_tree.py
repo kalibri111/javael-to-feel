@@ -1,15 +1,16 @@
 from lxml import etree
 
-from src.translator.ast_printer import FEELTreePrinter
-from src.translator.dmn_tree import DMNTreeNode, ExpressionDMN, DMNTree, printDMNTree, OperatorDMN
-from src.translator.feel_translator import ToFEELConverter
-from src.translator.knf_converter import toDMNReady
-from src.translator.node_algorithm import tree
-from src.translator.to_knf_zipper import zipFormula, unpack, concatWithOr
+from src.translator.visitors.feel_visitors import FEELTreePrinter
+from src.translator.dmn.dmn_tree import DMNTreeNode, ExpressionDMN, OperatorDMN
+from src.translator.dmn.dmn_tree_builder import DMNTree, printDMNTree
+from src.translator.visitors.javael_visitors import ToFEELConverter
+from src.translator.knf.knf_converter import toDMNReady
+from src.translator.ast_algorithm.javael_ast_algorithm import tree
+from src.translator.ast_algorithm.to_knf_zipper import zipFormula, unpack, concatWithOr
 from loguru import logger
 
-from src.translator.xml_packer import DMN_XML, ShapesDrawer
-from src.translator.zip_storage import OperatorsStorage, TableToDepTables, TableToDepInputDatas, InputDataToInfoReq
+from src.translator.xml.xml_packer import DMN_XML, ShapesDrawer
+from src.translator.singleton.singleton_storage import OperatorsStorage, TableToDepTables, TableToDepInputDatas, InputDataToInfoReq
 
 
 def translate(java_el_expr: str) -> DMNTree:
@@ -36,12 +37,13 @@ def translate(java_el_expr: str) -> DMNTree:
     return dmn_tree
 
 
-def xml_from_dmntree(dmn_tree_translated_root: DMNTree, xml_out_path: str) -> str:
+def element_from_dmntree(dmn_tree_translated_root: DMNTree, draw: bool) -> etree.Element:
     """
-    Builds xml representation of DMN structure and returns path to generated file
-    :param dmn_tree_translated_root: represents FEEL expressions, connected by non-logical operators
-    :param xml_out_path: path where to build xml
-    :return: None
+    Builds xml representation of DMN structure and returns etree.Element instance
+    :param draw: draw shapes
+    :param dmn_tree_translated_root:
+    :param xml_out_path:
+    :return:
     """
     dmn_xml_root = DMN_XML().visit(dmn_tree_translated_root)
 
@@ -49,10 +51,21 @@ def xml_from_dmntree(dmn_tree_translated_root: DMNTree, xml_out_path: str) -> st
     logger.debug(f"InputDataStorage has state: {TableToDepInputDatas()}")
     logger.debug(f"InputDataToInfoReq has state: {InputDataToInfoReq()}")
 
-    shapes_tag_root = ShapesDrawer().draw(dmn_tree_translated_root)
+    if draw:
+        shapes_tag_root = ShapesDrawer().draw(dmn_tree_translated_root)
 
-    dmn_xml_root.append(shapes_tag_root)
+        dmn_xml_root.append(shapes_tag_root)
+    return dmn_xml_root
 
+
+def xml_from_dmntree(dmn_tree_translated_root: DMNTree, xml_out_path: str) -> str:
+    """
+    Builds xml representation of DMN structure and returns path to generated file
+    :param dmn_tree_translated_root: represents FEEL expressions, connected by non-logical operators
+    :param xml_out_path: path where to build xml
+    :return: None
+    """
+    dmn_xml_root = element_from_dmntree(dmn_tree_translated_root, draw=True)
     generated_filepath = xml_out_path + str(id(dmn_tree_translated_root)) + '.xml'
     etree.ElementTree(dmn_xml_root).write(generated_filepath, pretty_print=True)
     return generated_filepath

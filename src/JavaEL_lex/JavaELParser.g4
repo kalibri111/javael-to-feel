@@ -35,7 +35,7 @@ member
     ;
 
 base
-    : (Empty | Not | Minus)+ ternary |
+    : (Empty | Not | Minus)+ expression |
       value
     ;
 

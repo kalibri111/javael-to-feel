@@ -8,12 +8,11 @@ from loguru import logger
 from collections import namedtuple
 from typing import List, Set, Dict
 from src.document_info_table.legacy.JavaEL_tokenize import JavaELTokenType, tokenize_expression
-from src.translator.node_algorithm import tree
-from src.translator.is_javael_simple import SimpleExprDetector
+from src.translator.ast_algorithm.javael_ast_algorithm import tree
 from src.translator.runner import generate_drd
-from src.translator.syntax_error_listener import JavaELSyntaxError
+from src.translator.visitors.javael_visitors import SimpleExprDetector
+from src.translator.ast_algorithm.syntax_error_listener import JavaELSyntaxError
 import ahocorasick
-from pathlib import Path
 import json
 
 ExpressionDependencyBase = namedtuple(
@@ -57,7 +56,7 @@ DATAFRAME_EXPRESSION = 'expression'
 DATAFRAME_IS_SIMPLE = 'isSimple'
 DATAFRAME_DRD_FILE = 'DRDFile'
 
-MNEMONICS_PATH = './mnemonics.json'
+MNEMONICS_PATH = 'mnemonics.json'
 
 
 def extract_prop_dependency_from_file(xml_file_path) -> Dict[str, List[ExpressionDependency]]:
@@ -163,10 +162,13 @@ def substitute_mnemonic(expr: str, automaton: ahocorasick.Automaton, json_dict: 
     return expr
 
 
-@click.command()
-@click.argument('path')
-@click.argument('out')
-def main(path, out):
+def generate_report(path, out):
+    """
+    Generates report table
+    :param path: path to source document
+    :param out: directory to generate report csv file
+    :return: None
+    """
     javael_exprs_from_file = extract_prop_dependency_from_file(xml_file_path=path)
 
     adjacency = {}  # str: List[str]
@@ -214,7 +216,8 @@ def main(path, out):
         if not is_simple:
             try:
                 logger.info(f'start generating xml from {subst_expr}')
-                generated_file = generate_drd(subst_expr, out)
+                # TODO: disabled drd generation
+                # generated_file = generate_drd(subst_expr, out)
             except JavaELSyntaxError:
                 logger.info(f'syntax error during xml form {subst_expr} generation')
                 generated_file = 'syntax_error'
@@ -238,6 +241,13 @@ def main(path, out):
     dataframe = dataframe.append(pd.DataFrame(dataframe_rows))
 
     dataframe.to_csv(csv_filename_generator(out), index=False)
+
+
+@click.command()
+@click.argument('path')
+@click.argument('out')
+def main(path, out):
+    generate_report(path, out)
 
 
 if __name__ == '__main__':

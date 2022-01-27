@@ -1,22 +1,23 @@
 import queue
-import string
 import random
 import re
-import typing
-
-from lxml import etree
-from enum import Enum
+import string
 from collections import namedtuple
-from src.translator.dmn_shape import DMNShapeOrdered, DMNShape, CENTER_X, CENTER_Y, build_shape_xml
-from src.translator.dmn_tree import DMNTree, DMNTreeNode, OperatorDMN, ExpressionDMN
-from src.translator.zip_storage import TableToDepTables, TableToDepInputDatas, InputDataToInfoReq
-from src.translator.knf_converter import toDMNReady
-from typing import Dict, Iterable, Set, List, Collection
+from enum import Enum
+from typing import Iterable, Set, List, Collection
+
 from loguru import logger
-from src.translator.feel_analizer import tree, FEELInputExtractor, FEELRuleExtractor, AndSplitter, OrSplitter, \
-    ScopesDeleter
+from lxml import etree
+
 from ANTLR_JavaELParser.JavaELParser import JavaELParser
-from src.translator.xml_conf import *
+from src.translator.xml.dmn_shape import DMNShapeOrdered, CENTER_X, CENTER_Y, build_shape_xml
+from src.translator.dmn.dmn_tree import DMNTreeNode, OperatorDMN, ExpressionDMN
+from src.translator.dmn.dmn_tree_builder import DMNTree
+from src.translator.ast_algorithm.feel_analizer import split_by_operator, OPERATOR
+from src.translator.ast_algorithm.feel_analizer import tree
+from src.translator.visitors.feel_visitors import FEELInputExtractor, FEELRuleExtractor
+from src.translator.xml.xml_conf import *
+from src.translator.singleton.singleton_storage import TableToDepTables, TableToDepInputDatas, InputDataToInfoReq
 
 RuleTag = namedtuple('RuleTag', ('inputEntries', 'outputEntry'))
 
@@ -79,30 +80,38 @@ class DmnElementsExtracter:
         :param expr: {'... and ...',..}
         :return: [[operands], ..]
         """
-
-        # TODO: рекурсивный обход с or
-        feel_ast = tree(expr)
-        or_splitter = OrSplitter()
-        or_splitter.visit(feel_ast)
-        or_operands = or_splitter.result
-
-        if not or_operands:
-            scopes_deleter = ScopesDeleter()
-            scopes_deleter.visit(feel_ast)
-            or_operands = scopes_deleter.result
-
         to_return = []
+
+        or_operands = split_by_operator(expr, OPERATOR.OR)
+
         for or_op in or_operands:
-            or_op_ast = tree(or_op)
-            and_splitter = AndSplitter()
-            and_splitter.visit(or_op_ast)
-            if and_splitter.result:
-                to_return.append(and_splitter.result)
-            else:
-                scopes_deleter = ScopesDeleter()
-                scopes_deleter.visit(or_op_ast)
-                to_return.append(scopes_deleter.result)
+            to_return.append(split_by_operator(or_op, OPERATOR.AND))
+
         return to_return
+
+        # # TODO: рекурсивный обход с or
+        # feel_ast = tree(expr)
+        # or_splitter = OrSplitter()
+        # or_splitter.visit(feel_ast)
+        # or_operands = or_splitter.result
+        #
+        # if not or_operands:
+        #     scopes_deleter = ScopesDeleter()
+        #     scopes_deleter.visit(feel_ast)
+        #     or_operands = scopes_deleter.result
+        #
+        # to_return = []
+        # for or_op in or_operands:
+        #     or_op_ast = tree(or_op)
+        #     and_splitter = AndSplitter()
+        #     and_splitter.visit(or_op_ast)
+        #     if and_splitter.result:
+        #         to_return.append(and_splitter.result)
+        #     else:
+        #         scopes_deleter = ScopesDeleter()
+        #         scopes_deleter.visit(or_op_ast)
+        #         to_return.append(scopes_deleter.result)
+        # return to_return
 
     @classmethod
     def getInputs(cls, expr: str) -> Set[str]:
@@ -673,6 +682,31 @@ class DecisionTable:
         return 'InformationRequirement_' + DecisionTable._constructIdSuffix()
 
 
+class TagIdGenerator(DecisionTable):
+    """
+    Adapter for generation ids
+    """
+    @staticmethod
+    def RuleId():
+        return super(TagIdGenerator, TagIdGenerator)._constructRuleId()
+
+    @staticmethod
+    def InputEntryId():
+        return super(TagIdGenerator, TagIdGenerator)._constructInputEntryId()
+
+    @staticmethod
+    def InputId():
+        return super(TagIdGenerator, TagIdGenerator)._constructInputId()
+
+    @staticmethod
+    def InputExpressionId():
+        return super(TagIdGenerator, TagIdGenerator)._constructInputExpressionId()
+
+    @staticmethod
+    def DecisionTableId():
+        return super(TagIdGenerator, TagIdGenerator)._constructDecisionTableId()
+
+
 class InputData:
     def __init__(self, name_attr: str):
         self._tag_id = self._id()
@@ -780,7 +814,7 @@ class ShapesDrawer:
 
 class DMN_XML:
     @classmethod
-    def build_xml(cls, drd_id: str, decisions: List[etree.Element]):
+    def xml_header(cls) -> etree.Element:
         NSMAP = {'dmndi': dmndi, 'dc': dc, 'biodi': biodi, 'di': di, }
         root = etree.Element('definitions', xmlns=xmlns, nsmap=NSMAP)
         attributes = root.attrib
@@ -788,6 +822,11 @@ class DMN_XML:
         attributes['namespace'] = namespace
         attributes['exporter'] = exporter
         attributes['exporterVersion'] = exporterVersion
+        return root
+
+    @classmethod
+    def build_xml(cls, drd_id: str, decisions: List[etree.Element]) -> etree.Element:
+        root = cls.xml_header()
 
         for d in decisions:
             if d.tag == 'decision':

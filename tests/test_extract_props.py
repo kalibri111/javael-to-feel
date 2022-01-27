@@ -1,5 +1,6 @@
 from unittest import TestCase
-from src.dependencyTable import extract_props_from_expression
+
+from src.document_info_table.report import extract_props_from_expression
 
 
 class TestExtractJavaELDependents(TestCase):

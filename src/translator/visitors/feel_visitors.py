@@ -1,20 +1,5 @@
-from antlr4 import *
 from ANTLR_FEELParser.feelParser import feelParser
-from ANTLR_FEELParser.feelLexer import feelLexer
 from ANTLR_FEELParser.feelVisitor import feelVisitor
-from src.translator.ast_printer import FEELTreePrinter
-
-
-def tree(expression: str) -> ParserRuleContext:
-    """
-    Create AST from expression and return root node
-    :param expression:
-    :return:
-    """
-    input_stream = InputStream(expression)
-    lexer = feelLexer(input_stream)
-    tree_returned = feelParser(CommonTokenStream(lexer))
-    return tree_returned.compilation_unit()
 
 
 class FEELInputExtractor(feelVisitor):
@@ -84,6 +69,9 @@ class OrSplitter(feelVisitor):
     def result(self):
         return self._operators
 
+    def clear(self):
+        self._operators.clear()
+
 
 class AndSplitter(feelVisitor):
     def __init__(self):
@@ -102,6 +90,9 @@ class AndSplitter(feelVisitor):
     def result(self):
         return self._operators
 
+    def clear(self):
+        self._operators.clear()
+
 
 class ScopesDeleter(feelVisitor):
     def __init__(self):
@@ -116,3 +107,21 @@ class ScopesDeleter(feelVisitor):
     @property
     def result(self):
         return self._operator
+
+
+class FEELTreePrinter(feelVisitor):
+    def __init__(self):
+        super(FEELTreePrinter, self).__init__()
+        self.result = []
+
+    def visitTerminal(self, node):
+        self.result.append(node.getText())
+
+    def visitParametersPositional(self, ctx):
+        self.result.append(ctx.getText())
+
+    @property
+    def tree_expression(self):
+        to_return = ' '.join(self.result)
+        self.result.clear()
+        return to_return
