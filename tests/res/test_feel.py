@@ -1,5 +1,7 @@
 import unittest
-from src.translator.ast_algorithm.feel_analizer import tree, FEELInputExtractor, FEELRuleExtractor
+
+from src.translator.ast_algorithm.feel_analizer import tree
+from src.translator.visitors.feel_visitors import FEELInputExtractor, FEELRuleExtractor
 
 feel_expr = 'x.call() and y > 5'
 rule_extr_binary = 'field.property = null'
