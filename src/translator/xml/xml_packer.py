@@ -89,29 +89,6 @@ class DmnElementsExtracter:
 
         return to_return
 
-        # # TODO: рекурсивный обход с or
-        # feel_ast = tree(expr)
-        # or_splitter = OrSplitter()
-        # or_splitter.visit(feel_ast)
-        # or_operands = or_splitter.result
-        #
-        # if not or_operands:
-        #     scopes_deleter = ScopesDeleter()
-        #     scopes_deleter.visit(feel_ast)
-        #     or_operands = scopes_deleter.result
-        #
-        # to_return = []
-        # for or_op in or_operands:
-        #     or_op_ast = tree(or_op)
-        #     and_splitter = AndSplitter()
-        #     and_splitter.visit(or_op_ast)
-        #     if and_splitter.result:
-        #         to_return.append(and_splitter.result)
-        #     else:
-        #         scopes_deleter = ScopesDeleter()
-        #         scopes_deleter.visit(or_op_ast)
-        #         to_return.append(scopes_deleter.result)
-        # return to_return
 
     @classmethod
     def getInputs(cls, expr: str) -> Set[str]:
@@ -950,8 +927,8 @@ class DMNTreeVisitor:
         self_id = 'dmn' + str(id(node))
 
         new_table = None
-        if node.operator.symbol.type in [JavaELParser.Empty, JavaELParser.Not]:
-            new_table = DecisionTable.from_constraint(self_id, node.operator.symbol.type, dependents, decision_list[-1])
+        if node.operator in [JavaELParser.Empty, JavaELParser.Not]:
+            new_table = DecisionTable.from_constraint(self_id, node.operator, dependents, decision_list[-1])
 
             if new_table is None:
                 logger.error(

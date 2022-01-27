@@ -21,11 +21,21 @@ ExpressionDependencyBase = namedtuple(
         'code',
         'expression',
         'dmn_name',
+        'attr',
         'form',
         'name',
     )
 )
 
+ExpressionOpReport = namedtuple(
+    'ExpressionOpReport',
+    (
+        'andCnt',
+        'orCnt',
+        'treeLvl',
+        'attrsCnt'
+    )
+)
 
 class ExpressionDependency(ExpressionDependencyBase):
     pass
@@ -55,6 +65,10 @@ DATAFRAME_DMN_NAME = 'DMN_name'
 DATAFRAME_EXPRESSION = 'expression'
 DATAFRAME_IS_SIMPLE = 'isSimple'
 DATAFRAME_DRD_FILE = 'DRDFile'
+AND_CNT = 'andCnt'
+OR_CNT = 'orCnt'
+ATRS_CNT = 'atrsCnt'
+TREE_LVL_CNT = 'treeLvlCnt'
 
 MNEMONICS_PATH = 'mnemonics.json'
 
@@ -94,6 +108,7 @@ def extract_prop_dependency_from_file(xml_file_path) -> Dict[str, List[Expressio
                             ExpressionDependency(
                                 code=match[0],
                                 dmn_name=match[0] + '.' + e[0],
+                                attr=e[0],
                                 expression=e[1],
                                 form=form_name,
                                 name=prop_name
@@ -162,9 +177,34 @@ def substitute_mnemonic(expr: str, automaton: ahocorasick.Automaton, json_dict: 
     return expr
 
 
-def generate_report(path, out):
+def expression_op_report(expr: str, attrs: Set[str]):
+    """
+    Dummy function for expression statistic
+    :param expr:
+    :param attrs:
+    :return:
+    """
+    attrs_cnt = 0
+    and_cnt = expr.count(' and ')
+    or_cnt = expr.count(' or ')
+    tre_lvl_cnt = 0
+
+    for atr in attrs:
+        if atr in expr:
+            attrs_cnt += 1
+
+    ast = tree(expr)
+    visitor = SimpleExprDetector()
+    visitor.visit(ast)
+    tre_lvl_cnt = visitor.levels
+
+    return ExpressionOpReport(andCnt=and_cnt, orCnt=or_cnt, treeLvl=tre_lvl_cnt, attrsCnt=attrs_cnt)
+
+
+def generate_report(path, out, mnemonics):
     """
     Generates report table
+    :param mnemonics: json with substitutions for complex lexems
     :param path: path to source document
     :param out: directory to generate report csv file
     :return: None
@@ -173,16 +213,20 @@ def generate_report(path, out):
 
     adjacency = {}  # str: List[str]
 
+    attrs = set()
+
     for form in javael_exprs_from_file.keys():
         for expr in javael_exprs_from_file[form]:
             logger.debug(expr.expression)
             # find dependent expressions here
             try:
                 adjacency[expr] = extract_props_from_expression(expr.expression)
+                attrs.add(expr.attr)
             except ValueError:
                 # TODO: error handler
                 pass
 
+    logger.debug(f"attrs: {attrs}")
     dataframe = pd.DataFrame(
         columns=[
             DATAFRAME_SRC_FORM_NAME,
@@ -190,14 +234,18 @@ def generate_report(path, out):
             DATAFRAME_DMN_NAME,
             DATAFRAME_IS_SIMPLE,
             DATAFRAME_EXPRESSION,
-            DATAFRAME_DRD_FILE
+            DATAFRAME_DRD_FILE,
+            OR_CNT,
+            AND_CNT,
+            ATRS_CNT,
+            TREE_LVL_CNT
         ]
     )
 
     dataframe_rows = []
 
     # ahocorasic initialization
-    with open(MNEMONICS_PATH, 'r') as mnemonic_file:
+    with open(mnemonics, 'r') as mnemonic_file:
         dict_of_mnemonics = json.load(mnemonic_file)
 
     suf_automaton = dictionary_init(dict_of_mnemonics)
@@ -207,10 +255,12 @@ def generate_report(path, out):
             is_simple = is_expression_simple(key.expression)
         except JavaELSyntaxError:
             is_simple = 'syntax_error'
+            continue
         generated_file = ''
 
         # substitute the mnemonic
         logger.info(f'substitute mnemonic from {key.expression}')
+
         subst_expr = substitute_mnemonic(key.expression, suf_automaton, dict_of_mnemonics)
 
         if not is_simple:
@@ -218,11 +268,14 @@ def generate_report(path, out):
                 logger.info(f'start generating xml from {subst_expr}')
                 # TODO: disabled drd generation
                 # generated_file = generate_drd(subst_expr, out)
+
             except JavaELSyntaxError:
                 logger.info(f'syntax error during xml form {subst_expr} generation')
                 generated_file = 'syntax_error'
             else:
                 logger.info(f'successfully generated xml from {subst_expr}')
+
+        expr_report = expression_op_report(key.expression, attrs)
 
         new_row = {
             DATAFRAME_SRC_FORM_NAME: key.form,
@@ -230,7 +283,11 @@ def generate_report(path, out):
             DATAFRAME_DMN_NAME: key.dmn_name,
             DATAFRAME_EXPRESSION: subst_expr,
             DATAFRAME_IS_SIMPLE: 'true' if is_simple else 'false',
-            DATAFRAME_DRD_FILE: generated_file
+            DATAFRAME_DRD_FILE: generated_file,
+            OR_CNT: expr_report.orCnt,
+            AND_CNT: expr_report.andCnt,
+            ATRS_CNT: expr_report.attrsCnt,
+            TREE_LVL_CNT: expr_report.treeLvl
         }
 
         logger.debug(f'adding row {new_row}')
@@ -247,7 +304,7 @@ def generate_report(path, out):
 @click.argument('path')
 @click.argument('out')
 def main(path, out):
-    generate_report(path, out)
+    generate_report(path, out, MNEMONICS_PATH)
 
 
 if __name__ == '__main__':

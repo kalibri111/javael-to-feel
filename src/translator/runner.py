@@ -40,6 +40,9 @@ def _generate_ternary_drd(java_el_ast: JavaELParser.ExpressionContext, xml_stora
     :param xml_storage_path:
     :return:
     """
+    p = JavaELTreePrinter()
+    p.visit(java_el_ast)
+    logger.debug(f"Generating ternary from {p.tree_expression}")
     doc_root = DMN_XML.xml_header()
     rows_cnt = 2**nesting
 

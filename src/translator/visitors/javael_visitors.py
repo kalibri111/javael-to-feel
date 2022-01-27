@@ -148,6 +148,10 @@ class SimpleExprDetector(JavaELParserVisitor):
     def is_simple(self):
         return self._subtrees < 2
 
+    @property
+    def levels(self):
+        return self._subtrees
+
     def subtree_cnt_update(self, ctx):
         if ctx.getChildCount() > 1:
             self._subtrees += 1

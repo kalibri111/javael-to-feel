@@ -18,11 +18,11 @@ term
     ;
 
 equality
-    : relation (Equality relation)?
+    : relation (Equal | NotEqual relation)?
     ;
 
 relation
-    : algebraic (Relation algebraic)? |
+    : algebraic (Greater | Less | GreaterEqual | LessEqual algebraic)? |
     OpenParen ternary CloseParen
     ;
 

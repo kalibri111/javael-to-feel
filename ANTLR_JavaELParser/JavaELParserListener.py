@@ -1,4 +1,4 @@
-# Generated from JavaELParser.g4 by ANTLR 4.9
+# Generated from src/JavaEL_lex/JavaELParser.g4 by ANTLR 4.9
 from antlr4 import *
 if __name__ is not None and "." in __name__:
     from .JavaELParser import JavaELParser

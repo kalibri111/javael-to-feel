@@ -7,7 +7,7 @@ from src.translator.runner import generate_drd
 
 DMN_TEST_OUT_PATH = 'res/out/test_xml_out'
 SOURCE_TEST_FILE = 'res/data_samples/Заявка_на_установку_замену_ПУ_522_прод_01_03_2021.xml'
-
+MNEMONICS_PATH = '../src/document_info_table/mnemonics.json'
 XSD_PATH = 'res/xsd/dmn.xsd'
 
 
@@ -21,7 +21,7 @@ class TestIntegration(unittest.TestCase):
             # "fields['p_TypeTP'].Code eq '32896' and fields['p_TimeTPType'].Code eq '32898'",
             # '( securityDataProvider_hasRole_tehprisEE_ZayavkaTP() and dmn4671452832 ) or ( securityDataProvider_hasRole_tehprisEE_ZayavkaTT() ) or ( securityDataProvider_loggedInUser )',
             # "fields_ApplicantType_value_fields_Code eq 'UL' ? 'Юридический адрес' : 'Адрес места регистрации'",
-            "!empty fields_isSimpleTPScheme ? fields_isSimpleTPScheme : ((empty fields_id or fields_SendDate > elUtils_toDate(2020,6,1)) and fields_'p_TypeTP'_Code eq '32880' and ((fields_ApplicantType_value_fields_Code eq 'FL' and fields_p_TypeOfLoad_value_fields_Code eq '56997' and ['32837']_contains_fields_p_ReliabilityCategory_Code and fields.FullPowerD eq 15) or(A_contains_fields_ApplicantType_Code and fields_FullPowerD < 150 ))) ? true : null"
+            "!empty fields_isSimpleTPScheme ? fields_isSimpleTPScheme : ((empty fields_id or fields_SendDate > elUtils_toDate) and fields_p_TypeTP_Code eq '32880' and ((fields_ApplicantType_value_fields_Code eq 'FL' and fields_p_TypeOfLoad_value_fields_Code eq '56997' and D_contains_fields_p_ReliabilityCategory_Code and fields_FullPowerD eq 15) or (A_contains_fields_ApplicantType_Code and fields_FullPowerD le 150 ))) ? true : null"
         ]
         # self.xmlschema = etree.XMLSchema(etree.parse(XSD_PATH))
 
@@ -38,7 +38,7 @@ class TestIntegration(unittest.TestCase):
             generate_drd(expr, DMN_TEST_OUT_PATH)
 
     def test_generate_report(self):
-        generate_report(SOURCE_TEST_FILE, DMN_TEST_OUT_PATH)
+        generate_report(SOURCE_TEST_FILE, DMN_TEST_OUT_PATH, MNEMONICS_PATH)
 
 
 if __name__ == '__main__':
