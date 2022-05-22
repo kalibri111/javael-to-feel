@@ -18,6 +18,7 @@ logger = logger.opt(colors=True)
 TERNARY_OP_COUNT = 5
 TRUE_TERNARY_CHILDREN_NO = 2
 FALSE_TERNARY_CHILDREN_NO = 4
+TREE_LVL_FILTER = 3
 
 keywords = [
     JavaELParser.Not,
@@ -146,7 +147,7 @@ class SimpleExprDetector(JavaELParserVisitor):
 
     @property
     def is_simple(self):
-        return self._subtrees < 2
+        return self._subtrees < TREE_LVL_FILTER
 
     @property
     def levels(self):

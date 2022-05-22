@@ -1,0 +1,12 @@
+version: "1.0"
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: ../../Dockerfile
+    volumes:
+      - .:/code
+      - logvolume01:/var/log
+volumes:
+  input: {}
+  output: {}

@@ -1,0 +1,9 @@
+#TODO: fix csv_filename_generator in report.py
+services:
+  parser:
+    build:
+      context: .
+    tty: true
+    volumes:
+      - ./input:/usr/src/app/input:ro
+      - ./output:/usr/src/app/output:rw

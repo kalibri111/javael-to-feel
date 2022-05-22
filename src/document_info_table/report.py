@@ -1,3 +1,9 @@
+import sys
+import os
+dirname = os.path.dirname(__file__)
+filename = os.path.join(dirname, '../../')
+sys.path.append(filename)
+
 import re
 import copy
 import click
@@ -61,6 +67,7 @@ english_name_re = re.compile(r'code=\"(.+?)\"')
 DATAFRAME_SRC_FORM_NAME = 'srcFormName'
 DATAFRAME_SRC_FIELD_NAME = 'srcFieldName'
 DATAFRAME_SRC_FIELD_CODE = 'srcFieldCode'
+DATAFRAME_SRC_FIELD_PROP = 'srcFieldProp'
 DATAFRAME_DMN_NAME = 'DMN_name'
 DATAFRAME_EXPRESSION = 'expression'
 DATAFRAME_IS_SIMPLE = 'isSimple'
@@ -146,10 +153,11 @@ def extract_props_from_expression(expr_dep: str) -> Set[str]:
 
 
 def csv_filename_generator(storage: str) -> str:
-    return storage + 'general_info.csv'
+    return storage + '/general_info.csv'
 
 
 def is_expression_simple(expr: str) -> bool:
+    # TODO: other metrics
     ast = tree(expr)
     visitor = SimpleExprDetector()
     visitor.visit(ast)
@@ -232,6 +240,8 @@ def generate_report(path, out, mnemonics):
             DATAFRAME_SRC_FORM_NAME,
             DATAFRAME_SRC_FIELD_NAME,
             DATAFRAME_DMN_NAME,
+            DATAFRAME_SRC_FIELD_CODE,
+            DATAFRAME_SRC_FIELD_PROP,
             DATAFRAME_IS_SIMPLE,
             DATAFRAME_EXPRESSION,
             DATAFRAME_DRD_FILE,
@@ -281,6 +291,8 @@ def generate_report(path, out, mnemonics):
             DATAFRAME_SRC_FORM_NAME: key.form,
             DATAFRAME_SRC_FIELD_NAME: key.name,
             DATAFRAME_DMN_NAME: key.dmn_name,
+            DATAFRAME_SRC_FIELD_CODE: key.code,
+            DATAFRAME_SRC_FIELD_PROP: key.attr,
             DATAFRAME_EXPRESSION: subst_expr,
             DATAFRAME_IS_SIMPLE: 'true' if is_simple else 'false',
             DATAFRAME_DRD_FILE: generated_file,

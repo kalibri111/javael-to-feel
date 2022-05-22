@@ -6,7 +6,7 @@ from src.translator.ast_algorithm.el_expression_to_dmn_tree import translate, xm
 from src.translator.runner import generate_drd
 
 DMN_TEST_OUT_PATH = 'res/out/test_xml_out'
-SOURCE_TEST_FILE = 'res/data_samples/Заявка_на_установку_замену_ПУ_522_прод_01_03_2021.xml'
+SOURCE_TEST_FILE = 'res/data_samples/additionalServiceForm - xml.xml'
 MNEMONICS_PATH = '../src/document_info_table/mnemonics.json'
 XSD_PATH = 'res/xsd/dmn.xsd'
 
