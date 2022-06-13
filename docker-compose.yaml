@@ -1,8 +1,9 @@
+version: '3.3'
 services:
   parser:
     build:
       context: .
-#    tty: true
+    tty: true
     volumes:
       - ./input:/usr/src/app/input:ro
       - ./output:/usr/src/app/output:rw

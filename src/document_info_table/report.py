@@ -106,6 +106,7 @@ def extract_prop_dependency_from_file(xml_file_path) -> Dict[str, List[Expressio
             forms_exprs_props[form_name] = []
 
             for match in props_exprs:
+                print("NEW MATCH: " + match[1])
 
                 exprs = re.findall(expression_re, match[1])
                 if exprs:
