@@ -110,7 +110,13 @@ def extract_prop_dependency_from_file(xml_file_path) -> Dict[str, List[Expressio
 
                 exprs = re.findall(expression_re, match[1])
                 if exprs:
-                    prop_name = re.findall(russian_name_re, match[1])[0]
+                    prop_name = re.findall(russian_name_re, match[1])
+
+                    if len(prop_name):
+                        prop_name = prop_name[0]
+                    else:
+                        prop_name = "ERROR"
+
                     for e in exprs:
                         forms_exprs_props[form_name].append(
                             ExpressionDependency(
