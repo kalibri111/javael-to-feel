@@ -117,6 +117,13 @@ def extract_prop_dependency_from_file(xml_file_path) -> Dict[str, List[Expressio
                     else:
                         prop_name = "ERROR"
 
+                    with open("blacklist.json") as blistf:
+                        blacklist = json.load(blistf)
+
+                    # blacklist
+                    if match[0] in blacklist:
+                        continue
+
                     for e in exprs:
                         forms_exprs_props[form_name].append(
                             ExpressionDependency(

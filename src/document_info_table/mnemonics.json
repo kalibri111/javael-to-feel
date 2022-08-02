@@ -18,5 +18,7 @@
   "view.viewId.contains(\"portal.xhtml\")": "view_viewId_contains_portal_xhtml()",
   "view.viewId.contains('portal.xhtml')": "view_viewId_contains_portal_xhtml()",
   "fields[\"p_TypeTP\"].Code": "fieldsAtp_TypeTP_Code",
-  "fields['p_TypeTP'].Code": "fieldsAtp_TypeTP_Code"
+  "fields['p_TypeTP'].Code": "fieldsAtp_TypeTP_Code",
+  "elUtils.runP('atrDP', {'object':object,'_field':_field}).u": "elUtils_run_DP",
+  "fields.ApplicantType.Code": "fAppCode"
 }
