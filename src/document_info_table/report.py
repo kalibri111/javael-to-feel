@@ -117,7 +117,7 @@ def extract_prop_dependency_from_file(xml_file_path) -> Dict[str, List[Expressio
                     else:
                         prop_name = "ERROR"
 
-                    with open("blacklist.json") as blistf:
+                    with open(dirname + "/blacklist.json") as blistf:
                         blacklist = json.load(blistf)
 
                     # blacklist
@@ -278,6 +278,7 @@ def generate_report(path, out, mnemonics):
         try:
             is_simple = is_expression_simple(key.expression)
         except JavaELSyntaxError:
+            logger.error('SYNTAX ERROR IN EXPRESSION: ' + key.expression)
             is_simple = 'syntax_error'
             continue
         generated_file = ''
